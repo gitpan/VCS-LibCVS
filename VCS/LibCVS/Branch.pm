@@ -1,25 +1,30 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright 2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
 #
 
-package VCS::LibCVS::FileSticky;
+package VCS::LibCVS::Branch;
 
 use strict;
 use Carp;
 
 =head1 NAME
 
-VCS::LibCVS::FileSticky - A sticky data referenced file revision.
+VCS::LibCVS::Branch - A named branch in the repository.
 
 =head1 SYNOPSIS
 
 =head1 DESCRIPTION
 
-Represents a single revision of a file managed by CVS, as indexed by a sticky,
-either a date or a non-branch tag.
+Represents a named branch in the repository.
+
+This branch may exist on any number of files.  This class is not much more than
+a wrapper around a branch name.
+
+The main branch (usually branch number 1) is named using the special name
+.TRUNK.
 
 =cut
 
@@ -27,7 +32,7 @@ either a date or a non-branch tag.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/FileSticky.pm,v 1.4 2004/08/27 03:49:09 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Branch.pm,v 1.2 2004/08/08 17:44:11 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -37,8 +42,9 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/FileSticky.pm,v 1
 # Private variables
 ###############################################################################
 
-# $self->{FileRevision}     VCS::LibCVS::FileRevision of this sticky
-# $self->{Sticky}           VCS::LibCVS::Sticky the sticky data
+# $self->{Repository}  The VCS::LibCVS::Repository in which the branch lives.
+#
+# $self->{Name}         scalar string which is the name of the branch.
 
 ###############################################################################
 # Class routines
@@ -48,15 +54,15 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/FileSticky.pm,v 1
 
 =head2 B<new()>
 
-$file_sticky = VCS::LibCVS::FileSticky->new($file_revision, $sticky)
+$branch = VCS::LibCVS::Branch->new($repo, $name)
 
 =over 4
 
-=item return type: VCS::LibCVS::FileSticky
+=item return type: VCS::LibCVS::Branch
 
-=item argument 1 type: VCS::LibCVS::FileRevision
+=item argument 1 type: VCS::LibCVS::Repository
 
-=item argument 2 type: VCS::LibCVS::Sticky
+=item argument 2 type: scalar string
 
 =back
 
@@ -64,11 +70,9 @@ $file_sticky = VCS::LibCVS::FileSticky->new($file_revision, $sticky)
 
 sub new {
   my $class = shift;
-  my ($file_revision, $sticky) = @_;
   my $that = bless {}, $class;
 
-  $that->{FileRevision} = $file_revision;
-  $that->{Sticky} = $sticky;
+  ($that->{Repository}, $that->{Name}) = @_;
 
   return $that;
 }
@@ -79,41 +83,45 @@ sub new {
 
 =head1 INSTANCE ROUTINES
 
-=head2 B<get_file_revision()>
+=head2 B<get_name()>
 
-$file_rev = $file_sticky->get_file_revision()
+$b_name = $branch->get_name()
 
 =over 4
 
-=item return type: VCS::LibCVS::FileRevision
+=item return type: scalar string
 
 =back
 
 =cut
 
-sub get_file_revision() {
-  return shift->{FileRevision};
+sub get_name() {
+  return shift->{Name};
 }
 
-=head2 B<get_sticky()>
+=head2 B<equals()>
 
-$sticky = $file_sticky->get_sticky()
+if ($branch->equals($other_branch)) { . . .
 
 =over 4
 
-=item return type: VCS::LibCVS::Sticky
+=item return type: scalar boolean
 
 =back
 
 =cut
 
-sub get_sticky() {
-  return shift->{Sticky};
+sub equals() {
+  my $self = shift;
+  my $other = shift;
+  return (($self->{Repository}->equals($other->{Repository}))
+           && ($self->{Name} eq $other->{Name}));
 }
 
 ###############################################################################
 # Private routines
 ###############################################################################
+
 
 =head1 SEE ALSO
 

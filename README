@@ -1,40 +1,52 @@
-                        LibCVS Version Perl-1.00.00 (1.0000_0)
+                        LibCVS Version Perl-1.00.01 (1.0001_0)
 
 This is alpha software.  Use at your own risk. 
+
+Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+
+All rights reserved. This program is free software; you can redistribute it
+and/or modify it under the same terms as Perl itself.
+
 
 DESCRIPTION
 
 LibCVS provides access to CVS working directories and repositories.  This is
-the Perl version of LibCVS.  See http://libcvs.cvshome.org.
+the Perl version of LibCVS.  See http://libcvs.cvshome.org.  If you are using
+LibCVS please let us know, we are keen to help.
 
-Take a look at the example script: examples/lcvs-example.
+It also ships with two useful scripts: lcvs-logsummary which transforms CVS
+commit logs into ChangeLog format, grouping multiple file commits into a single
+entry; lcvs-st which prints out an exhaustive status of files in a working
+directory.
 
-A lot of effort has been putinto the documentation, so please use perldoc.  If
+To learn LibCVS, the script examples/lcvs-example is a good place to start.
+
+A lot of effort has been put into the documentation, so please use perldoc.  If
 something isn't clear in the docs, please report it, so we can fix it up.
 
 
 MAJOR LIMITATIONS
 
-At present LibCVS can only connect to local CVS repositories.  No pserver, no
-ssh.  This will change in the next release.  I'm pushing it out without these
-abilities to get across the idea that it is early alpha, so that you don't try
-it out on production repositories just yet.  Right now I want feedback.
+The current version provides read-only access, it won't modify your working
+directory, nor your repository.  Ways to modify them will come in later
+releases when I'm more comfortable that the core is working properly.
 
 The tests are not yet thorough.  The only tests are for the script lcvs-st.
 
 Performance is poor.
 
-The example script, lcvs-st, could have a lot more features.
+The interface _will_ change, but changes will be detailed in this README and
+the ChangeLog.  I will add and remove objects, change their names, change
+function names and function signatures.
 
-The interface _will_ change.  I will change function signatures, and object
-names.
 
 PREREQUISITES
 
-* You will need Perl installed.  I've developed with Perl 5.6.1, but it will
-  probably work with others too.
+* You will need Perl installed.  I've developed with Perl 5.6.1 and 5.8.0, but
+  it will probably work with others too.
 
-* You will need CVS installed.  I've developed with CVS 1.11.6, but it will
+* For remote repository access, CVS is not required.  For local access it is.
+  I've developed with CVS 1.10.8, 1.11.1p1, 1.11.11+ and 1.12.9+, but it will
   probably work with others too.  (http://www.cvshome.org/)
 
 
@@ -52,9 +64,66 @@ Or, possibly, use the CPAN shell:
   cpan> install VCS::LibCVS
 
 
-MAJOR CHANGES
+CHANGES
 
-This is a first release so there are no changes.
+This section includes changes to the library interface, and internal changes
+that may affect users.  For a complete list of changes since the previous
+release, look in the ChangeLog-Perl-* file.  For a list of fixed bugs, see the
+issues tracker on http://libcvs.cvshome.org/.
+
+  * Support for pserver and ext/SSH connections.
+
+  * A new authentication callback system.
+
+  * Include the trunk as .TRUNK in many places.
+
+  * Many functions for traversing the branch structure.
+
+  * Cache IgnoreChecker objects.
+
+  * Support new date format from cvs 1.12 series.
+
+  * WorkingFile can be queried about impending conflicts.
+
+  * Update terminology for comparing revisions.  LESS -> ANCESTOR,
+    GREATER -> DESCENDANT
+
+  * Add DEBUG_OPTIONS debugging level to Client.
+
+Details of all the interface changes:
+
+  * New class Branch
+
+  * Add equals() to many classes.
+
+  * Other new routines:
+
+      + Entry->is_directory()
+      + FileBranch->get_branch()
+      + FileBranch->get_first_revision()
+      + FileBranch->get_parent()
+      + FileBranch->get_precedes()
+      + FileBranch->get_revision()
+      + FileBranch->is_trunk()
+      + FileRevision->compare()
+      + FileRevision->equals()
+      + FileRevision->get_file_branch()
+      + FileRevision->get_predecessor()
+      + FileRevision->get_successor()
+      + FileRevision->get_time()
+      + FileRevision->get_time_string()
+      + FileRevision->is_dead()
+      + RepositoryDirectory->get_file()
+      + RepositoryDirectory->get_files()
+      + RepositoryFile->get_branch()
+      + RepositoryFile->get_tag()
+      + RepositoryFileOrDirectory->find()
+      + RevisionNumber->first_revision_of()
+      + RevisionNumber->get_predecessor()
+      + RevisionNumber->get_successor()
+      + RevisionNumber->is_import_branch()
+      + WorkingDirectory->add_directories()
+
 
 
 TODO

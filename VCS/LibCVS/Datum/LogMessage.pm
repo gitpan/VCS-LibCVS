@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -18,7 +18,8 @@ VCS::LibCVS::Datum::LogMessage - A cvs log message.
 
 =head1 DESCRIPTION
 
-A CVS log message, parsed version of info provided in this format:
+A CVS log message for one revision.  It parses a message of this format and
+provides access to the various parts:
 
   revision 1.2.2.1
   date: 2002/11/13 02:29:46;  author: dissent;  state: Exp;  lines: +1 -0
@@ -36,7 +37,7 @@ VCS::LibCVS::Datum
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/LogMessage.pm,v 1.3 2003/06/25 19:07:00 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/LogMessage.pm,v 1.5 2004/08/24 03:39:38 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::Datum");
@@ -107,7 +108,7 @@ sub new {
     $that->{Branches} = ( (shift @$log) =~ /branches:  (.*)/ );
   }
 
-  $that->{Text} = join("", @$log);
+  $that->{Text} = join("\n", @$log);
 
   return $that;
 }

@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ VCS::LibCVS::RepositoryFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryDirectory.pm,v 1.3 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryDirectory.pm,v 1.8 2004/08/31 00:20:32 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::RepositoryFileOrDirectory");
@@ -55,18 +55,77 @@ use vars ('@ISA');
 
 =head2 B<get_files()>
 
-@r_files = $r_dir->get_files()
+@r_files = $r_dir->get_files({ Recursive => 0 })
 
 =over 4
+
+=item argument 1 type: hash ref to options
 
 =item return type: list of VCS::LibCVS::RepositoryFile
 
 =back
 
+Return a complete list of CVS files, regardless of which branches they are on,
+and whether they are alive or dead.  The Recursive option may be set, to return
+all files in all subdirectories also, or the default which is to return only
+files in this directory.
+
+Available options are: "Recursive".
+
 =cut
 
 sub get_files {
-  confess "Not Implemented";
+  my $self = shift;
+  my $options = shift || {};
+
+  # For recursive mode, the rlog command is used to fetch the list of files.
+  # log isn't appropriate for this because log requires each directory to be
+  # reported as a working directory.  For non-recursive mode, the log command
+  # is used.  It's better than rlog for this because some older versions (at
+  # least 1.11.1p1) of log don't respect the "-l" option.  In both cases the
+  # "-R" option is used to output just the names of the RCS files, since that's
+  # all that's needed.
+
+  my $command_name = ($options->{Recursive}) ? "rlog" : "log";
+  my $command = VCS::LibCVS::Command->new({}, $command_name, ["-R"], [$self]);
+  $command->issue($self->get_repository());
+
+  # The filenames are returned as messages, containing absolute paths to the
+  # RCS files on the cvs server machine.  They are cleaned up by making them
+  # relative to the repository root directory, removing the ",v", and the
+  # optional Attic.  Then a RepositoryFile object is created for each one.
+
+  my $repo_root = $self->get_repository()->get_root()->get_dir();
+  my @files = map {
+    $_ =~ s#^$repo_root/(.*?)(Attic/)?([^/]*)?,v#$1$3#;
+    VCS::LibCVS::RepositoryFile->new($self->{Repository}, $_);
+  } $command->get_messages(",v\$");
+
+  return \@files;
+}
+
+=head2 B<get_file()>
+
+$r_file = $r_dir->get_file($name)
+
+=over 4
+
+=item argument 1 type: scalar string, the name of the file.
+
+=item return type: VCS::LibCVS::RepositoryFile
+
+=back
+
+Return a single named repository file, which is in this directory.  If there's
+no such file in this directory, an exception is thrown.
+
+=cut
+
+sub get_file {
+  my $self = shift;
+  my $name = $self->get_name() . "/" . shift;
+
+  return VCS::LibCVS::RepositoryFile->new($self->{Repository}, $name);
 }
 
 =head2 B<get_directories()>

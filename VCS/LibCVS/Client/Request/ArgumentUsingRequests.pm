@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -33,7 +33,7 @@ up, ci, add, etc.
 
 =cut
 
-$VCS::LibCVS::Client::Request::ArgumentUsingRequests::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Request/ArgumentUsingRequests.pm,v 1.13 2003/06/27 20:52:33 dissent Exp $ ';
+$VCS::LibCVS::Client::Request::ArgumentUsingRequests::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Request/ArgumentUsingRequests.pm,v 1.15 2004/05/18 13:35:40 dissent Exp $ ';
 
 ###############################################################################
 # ArgumentUsingRequest
@@ -289,6 +289,39 @@ package VCS::LibCVS::Client::Request::remove;
 use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
 sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "remove"; }
+
+###############################################################################
+# rdiff
+###############################################################################
+
+=head2 VCS::LibCVS::Client::Request::rdiff
+
+Find differences in one or more files, without the need for a working
+directory.
+
+=cut
+
+package VCS::LibCVS::Client::Request::rdiff;
+use vars ('@ISA');
+@ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
+sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "rdiff"; }
+sub needs_file_contents { return 0; }
+sub needs_file_entry { return 0; }
+
+###############################################################################
+# rlog
+###############################################################################
+
+=head2 VCS::LibCVS::Client::Request::rlog
+
+Get the logs of one or more files.
+
+=cut
+
+package VCS::LibCVS::Client::Request::rlog;
+use vars ('@ISA');
+@ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
+sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "rlog"; }
 
 =head1 SEE ALSO
 

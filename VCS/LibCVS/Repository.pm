@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -26,7 +26,7 @@ Represents a CVS Repository.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Repository.pm,v 1.12 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Repository.pm,v 1.17 2004/08/31 01:56:34 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -40,8 +40,9 @@ use vars ('%Repository_Cache');
 # Private variables
 ###############################################################################
 
-# $self->{Root}     object of type VCS::LibCVS::Datum::Root
-# $self->{Client}   already connected VCS::LibCVS::Client
+# $self->{Root}           object of type VCS::LibCVS::Datum::Root
+# $self->{Client}         already connected VCS::LibCVS::Client
+# $self->{IgnoreChecker}  object of type VCS::LibCVS::IgnoreChecker
 
 # $self->{RepositoryFileOrDirectoryCache} hashref containing
 #                                         RepositoryFileOrDirectory instances
@@ -170,7 +171,6 @@ sub get_version {
   my $self = shift;
 
   my $client = $self->_new_client();
-  $client->connect();
 
   # If the version request is not supported, then it's pre 1.11
   return "pre 1.11" unless ($client->valid_requests()->{version});
@@ -190,38 +190,79 @@ sub get_version {
   return $responses[0]->get_message();
 }
 
+=head2 B<get_ignoreChecker()>
+
+$ignoreChecker = $repo->get_ignoreChecker()
+
+=over 4
+
+=item return type: VCS::LibCVS::IgnoreChecker
+
+=back
+
+Returns an IgnoreChecker for this repository
+
+=cut
+
+sub get_ignoreChecker {
+  my $self = shift;
+
+  if ( ! $self->{IgnoreChecker} ) {
+    $self->{IgnoreChecker} = VCS::LibCVS::IgnoreChecker->new($self);
+  }
+  return $self->{IgnoreChecker};
+}
+
+=head2 B<equals()>
+
+if ($repo1->equals($repo2)) {
+
+=over 4
+
+=item return type: boolean
+
+=item argument 1 type: VCS::LibCVS::Repository
+
+=back
+
+Returns true if this and the argument represent the same the repository.
+
+=cut
+
+sub equals {
+  my $self = shift;
+  my $other = shift;
+  return $self->{Root}->equals($other->{Root});
+}
+
 ###############################################################################
 # Private routines
 ###############################################################################
 
 # VCS::LibCVS::Client
 #
-# Returns a client connected to this repository
+# Returns a client connected to this repository.
+# See Client.pm for details of why a repository directory name is passed.
 # Used in Command.pm
 
 sub _get_client {
   my $self = shift;
+  my $any_repo_dir = shift;
 
-  return $self->{Client} if $self->{Client};
+  if ( ! $self->{Client} ) {
+    $self->{Client} = $self->_new_client($any_repo_dir);
+  }
 
-  my $client = $self->_new_client();
-  $client->connect();
-
-  $self->{Client} = $client;
-  return $client;
+  return $self->{Client};
 }
 
-# create a new client, not connected to the repo.
+# create a new client, connected to the repo.
 
 sub _new_client {
   my $self = shift;
+  my $any_repo_dir = shift;
 
-  my $conn;
-  if ($self->{Root}->{Protocol} =~ /^(local|fork)$/) {
-    $conn = VCS::LibCVS::Client::Connection::Local->new();
-  } else {
-    confess "Unsupported protocol: $self->{Root}->{Protocol}";
-  }
+  my $conn = VCS::LibCVS::Client::Connection->new($self->{Root});
   my $client = VCS::LibCVS::Client->new($conn, $self->{Root}->{RootDir});
   # Turn off two possible responses.  This will put all file transmissions
   # through the Updated responses, which is fine since this client is smarter
@@ -229,6 +270,9 @@ sub _new_client {
   $client->valid_responses()->{'Update-existing'} = 0;
   $client->valid_responses()->{'Created'} = 0;
 
+  $client->testing_dir($any_repo_dir);
+
+  $client->connect();
   return $client;
 }
 

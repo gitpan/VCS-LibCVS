@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ VCS::LibCVS::WorkingFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingUnmanagedFile.pm,v 1.4 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingUnmanagedFile.pm,v 1.6 2004/08/31 00:20:32 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::WorkingFileOrDirectory");
@@ -82,8 +82,7 @@ sub new {
   confess "$full_name is managed by CVS" if $ent;
 
   # Check if the file should be ignored by CVS
-  # Optimize: Don't create an IgnoreChecker each time.  See issue 48.
-  my $ignorer = VCS::LibCVS::IgnoreChecker->new($that->get_repository());
+  my $ignorer = $that->get_repository()->get_ignoreChecker();
   confess "No such file $full_name" unless -f $full_name;
   confess "That's the admin dir" if $full_name eq $VCS::LibCVS::Admin_Dir_Name;
   confess "$full_name is being ignored" if $ignorer->ignore_check($full_name);

@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -52,7 +52,7 @@ To access the contained data see the accessors for each subclass.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum.pm,v 1.10 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum.pm,v 1.12 2004/08/31 00:20:32 dissent Exp $ ';
 
 ###############################################################################
 # Private variables
@@ -82,10 +82,10 @@ constructor.
 
 =over 2
 
-=item E<32>E<32>option 1: ::FileHandle
+=item E<32>E<32>option 1: IO::Handle
 
-A ::FileHandle object from which the Datum will be read.  Most Datum are line
-oriented, so they will read one or more lines from the ::Filehandle.
+An IO::Handle object from which the Datum will be read.  Most Datum are line
+oriented, so they will read one or more lines from the IO::handle.
 
 =item E<32>E<32>option 2: scalar
 
@@ -108,7 +108,7 @@ construct their own Datum and pass it to the Client::Request constructor.
 
 =back
 
-Construct a new Datum.  The ::FileHandle option is used for reading a Datum
+Construct a new Datum.  The IO::Handle option is used for reading a Datum
 from the server, the others when constructing it locally.
 
 =cut
@@ -121,9 +121,9 @@ sub new {
 
   my $that = bless {}, $class;
 
-  # if the argument is a filehandle, read in the right number of lines, and
+  # if the argument is an iohandle, read in the right number of lines, and
   # overwrite $arg_data with that.
-  if (UNIVERSAL::isa($arg_data, "FileHandle")) {
+  if (UNIVERSAL::isa($arg_data, "IO::Handle")) {
     my @arg_data = map { $arg_data->getline(); } $that->_data_names();
     $arg_data = \@arg_data;
   }
@@ -179,18 +179,18 @@ $datum->protocol_print($file_handle)
 
 =item return type: undef
 
-=item argument 1 type: ::FileHandle
+=item argument 1 type: IO::Handle
 
 =back
 
-Prints the Datum to the ::FileHandle.  The output will be formatted for
+Prints the Datum to the IO::Handle.  The output will be formatted for
 sending to the cvs server, including the placement of newlines.
 
 =cut
 
 sub protocol_print {
-  my ($self, $fh) = @_;
-  $fh->print($self->as_protocol_string());
+  my ($self, $ioh) = @_;
+  $ioh->print($self->as_protocol_string());
 }
 
 =head2 B<as_protocol_string()>

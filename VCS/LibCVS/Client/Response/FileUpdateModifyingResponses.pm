@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -29,7 +29,7 @@ Each response comes with a predetermined set of args, listed below.
 
 =cut
 
-$VCS::LibCVS::Client::Response::FileUpdatModifyingResponses::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Response/FileUpdateModifyingResponses.pm,v 1.8 2003/06/27 20:52:33 dissent Exp $ ';
+$VCS::LibCVS::Client::Response::FileUpdatModifyingResponses::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Response/FileUpdateModifyingResponses.pm,v 1.9 2004/08/27 03:49:09 dissent Exp $ ';
 
 ###############################################################################
 # FileUpdateModifyingResponse

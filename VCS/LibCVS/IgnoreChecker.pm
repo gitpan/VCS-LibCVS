@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -35,7 +35,7 @@ See the CVS info page for which files are ignored.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/IgnoreChecker.pm,v 1.5 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/IgnoreChecker.pm,v 1.6 2004/08/27 03:49:09 dissent Exp $ ';
 
 use constant DEFAULT_IGNORE_LIST =>
   ( 'RCS', 'SCCS', 'CVS', 'CVS.adm',

@@ -1,6 +1,6 @@
 # -*- CPerl -*-
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ use Test;
 use File::Spec;
 use File::Temp qw/ tempdir /;
 
-BEGIN { plan tests => 103, todo => [34,85] }
+BEGIN { plan tests => 111 }
 
 # Find the directory where this script is.
 my ($vol, $dirname, $exename) = File::Spec->splitpath($0);
@@ -54,8 +54,8 @@ my $lcvs_st = "perl -I$dirname/../../blib/lib $dirname/../lcvs-st";
 my @expected_files = ( "ABM", "ABU", "AUM", "AUU",
                        "NMM", "NMU", "NUM",
                        "RMB", "RMM", "RMU", "RUB", "RUM", "RUU",
-                       "UBB", "UBM", "UBU", "UCB", "UCM", "UCU", "UMB",
-                       "UMM", "UMU", "UUB", "UUM", "UUU" );
+                       "UBB", "UBM", "UBU", "UCB", "UCC", "UCM", "UCU",
+                       "UMB", "UMC", "UMM", "UMU", "UUB", "UUM", "UUU" );
 
 # First set of tests, just invoke it in the directory
 {

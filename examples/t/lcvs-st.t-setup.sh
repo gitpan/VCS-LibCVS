@@ -1,4 +1,10 @@
-#!/bin/bash
+#!/bin/sh
+#
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+#
+# All rights reserved. This program is free software; you can redistribute it
+# and/or modify it under the same terms as Perl itself.
+#
 
 # Create a repository and sandbox for testing lcvs-st
 
@@ -75,7 +81,7 @@ ModifyTop () {
 }
 
 # Change working directory from one sandbox to the other
-toggle-dir () { cd $(pwd | sed "s#^$base/sandbox1#xxxxxxxxxxxxxx#
+toggle_dir () { cd $(pwd | sed "s#^$base/sandbox1#xxxxxxxxxxxxxx#
                                 s#^$base/sandbox2#$base/sandbox1#
                                 s#^xxxxxxxxxxxxxx#$base/sandbox2#") ; }
 
@@ -93,12 +99,9 @@ toggle-dir () { cd $(pwd | sed "s#^$base/sandbox1#xxxxxxxxxxxxxx#
 #   + $base/sandbox[12] are defined
 #   + current working directory is $base/sandbox1/dir1
 
-# The routines use these variables to communicate:
+# The routines uses this variable to communicate:
 inRepository=false     # true if file $name has been committed to the repository
                        # and is not in the Attic
-localRevNumber=" "   # Revision number of local file (second digit)
-reposRevNumber=" "     # The latest revision in the repository (second digit)
-
 
 ### 1] Local Admin State
 
@@ -106,15 +109,13 @@ reposRevNumber=" "     # The latest revision in the repository (second digit)
 laN () { true ; }
 
 # Available
-laU () { Modify; Add; Commit
-         inRepository=true; localRevNumber=1; reposRevNumber=1 ; }
+laU () { Modify; Add; Commit; inRepository=true; }
 
 # Added
 laA () { Modify; Add; }
 
 # Removed
-laR () { Modify; Add; Commit; Remove
-         inRepository=true; localRevNumber="1"; reposRevNumber="1" ; }
+laR () { Modify; Add; Commit; Remove; inRepository=true; }
 
 
 ### 2] Local File State
@@ -133,23 +134,19 @@ lfM () { Modify ; }
 lfC () {
     if ! $inRepository ; then
         Modify; Add; Commit; inRepository=true
-        reposRevNumber=$(( $reposRevNumber + 1 ))
-        localRevNumber=$reposRevNumber
     else
         Update
-        localRevNumber=$reposRevNumber
     fi
 
     Modify
 
-    toggle-dir
+    toggle_dir
 
-    Update; Modify; Commit; reposRevNumber=$(( $reposRevNumber + 1 ))
+    Update; Modify; Commit
 
-    toggle-dir
+    toggle_dir
 
     Update
-    localRevNumber=$reposRevNumber
 }
 
 ### 3] Repository State
@@ -158,19 +155,32 @@ lfC () {
 rsU () { true ; }
 
 # Absent
-rsB () { cd $base/repository/dir1; rm -f $name,v ; cd $base/sandbox1/dir1
-         reposRevNumber=" " ; }
+rsB () { cd $base/repository/dir1; rm -f $name,v ; cd $base/sandbox1/dir1 ; }
 
 # Modified
-rsM () { 
-    toggle-dir
+rsM () {
+    toggle_dir
     if ! $inRepository ; then
         Modify; Add; Commit; inRepository=true
-        reposRevNumber=$(( $reposRevNumber + 1 ))
     else
-        Update; ModifyTop; Commit; reposRevNumber=$(( $reposRevNumber + 1 ))
+        Update; ModifyTop; Commit
     fi
-    toggle-dir
+    toggle_dir
+}
+
+# Modified will Conflict
+# We can assume that the file is already locally modified,
+# since this status only makes sense in those cases.
+rsC () {
+    if ! $inRepository ; then
+        Modify; Add; Commit; inRepository=true
+    fi
+
+    toggle_dir
+
+    Update; Modify; ModifyTop; Commit
+
+    toggle_dir
 }
 
 ### Now create all of the files.
@@ -183,15 +193,16 @@ for localRev in A N R U ; do
 
 for localState in B C M U ; do
 
+# report progress
 echo -n . 1>&2
 
-for reposState in B M U ; do
+for reposState in B M U C; do
 
     name=$localRev$localState$reposState
 
     # Skip impossible situations
 
-    # NUU, no file anywhere, won't appear up in lcvs-st output
+    # NUU, no file anywhere, won't appear in lcvs-st output
     if [ $name = "NUU" ] ; then continue ; fi
     # If there's no local revision it can't be locally or remotely absent
     if [ $localRev = "N" ] ; then
@@ -205,11 +216,14 @@ for reposState in B M U ; do
     if [ $localRev = "R" -a $localState = "B" ] ; then continue ; fi
     # Locally Modified/Conflict means there must be a local revision
     if [ $localState = "C" -a ! $localRev = "U" ] ; then continue ; fi
+    # Will Conflict on Merge means must be locally modified, and have state
+    if [ $reposState = "C" ] ; then
+        if [ $localState != "M" -a $localState != "C" ] ; then continue ; fi
+        if [ $localRev != "U" ] ; then continue ; fi
+    fi
 
     # Initialize communication between the routines
     inRepository=false
-    localRevNumber=" "
-    reposRevNumber=" "
 
     # Call the advanced routines for this file
     eval la$localRev

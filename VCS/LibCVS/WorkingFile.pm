@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ VCS::LibCVS::WorkingFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingFile.pm,v 1.7 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingFile.pm,v 1.12 2004/08/27 06:08:36 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::WorkingFileOrDirectory");
@@ -45,6 +45,7 @@ use constant STATE_UPTODATE       => 0;
 use constant STATE_MODIFIED       => 1;
 use constant STATE_HADCONFLICTS   => 2;
 use constant STATE_ABSENT         => 3;
+use constant STATE_WILLCONFLICT   => 4;
 
 ###############################################################################
 # Class variables
@@ -175,16 +176,22 @@ Returns the file branch this local file is on.
 The branch is determined by looking at any sticky branch tags, and then at the
 revision number.
 
+If a branch has a sticky non-branch tag, then there can be amibiguity about
+which branch the revision is on.  For instance, revision 1.4 could be the
+fourth revision on branch 1 (the trunk), or it could be the initial revision of
+branch 1.4.2.  The best way to resolve this ambiguity would be to examine the
+rest of the files in the repository to determine which branch the non-branch
+tag lies on.  Such an algorithm is not implemented here, instead the parent
+branch is always assumed.  This is important to consider in the common case of
+base tags for branches.
+
 =cut
 
 sub get_file_branch {
   my $self = shift;
 
-  # Handle the very common case of the file being on the trunk.  It's
-  # done separately because the $r_file->get_branches() routine doesn't
-  # include the trunk branches: 1, 2, 3 etc.
-
-  my $revision = $self->{Entry}->get_revision();
+  # Quickly handle the common case of a trunk revision.
+  my $revision = $self->get_revision_number();
   my $branch_rev = $revision->branch_of();
   if ($branch_rev->is_trunk()) {
     return VCS::LibCVS::FileBranch->new($self->get_remote_object(),
@@ -192,32 +199,32 @@ sub get_file_branch {
                                         $branch_rev);
   }
 
-  # In order to create the FileBranch, we need both the revision number and the
-  # branch tag.  Sadly, the Entries file doesn't include the branch tag in the
-  # case where there is a non-branch sticky tag.  So, we get the remote file
-  # and download all of the branches from the server, and search through them
-  # for the right one.
-
-  # First we search by the tag, then the revision, which takes care of the case
-  # where the file is at the base revision of the branch and looking at the
-  # revision number alone would lead us to the wrong branch.  (Revision 1.4
-  # could be on branch 1 or branch 1.4.2.)
+  # If there's a sticky tag, it could be a branch tag or a non-branch tag.
+  # However, we can't distinguish them, so we get all the branches from the
+  # server and search for the right one.  If it's a non-branch tag, it's
+  # handled just the same as the case of no tag.
 
   my $r_file = $self->get_remote_object();
   my $all_branches = $r_file->get_branches();
 
-  # First look for a branch with a matching tag
+  # If it's a branch tag, it will match one of the branches.
   my $tag = $self->{Entry}->get_tag();
-  foreach my $branch (@$all_branches) {
-    return $branch if $branch->get_tag()->equals($tag);
+  if (defined ($tag)) {
+    foreach my $branch (@$all_branches) {
+      return $branch if $branch->get_tag()->equals($tag);
+    }
   }
 
-  # Now look for a branch with a matching revision number
+  # Either a non-branch tag, or no tag at all, just use the revision number to
+  # find the right branch.
   foreach my $branch (@$all_branches) {
     return $branch if $branch->get_revision_number()->equals($branch_rev);
   }
 
-  confess("No branch found for $self->{FullName} " . $revision->as_string());
+  # No named branch could be found, so we return an unnamed one.
+  return VCS::LibCVS::FileBranch->new($self->get_remote_object(),
+                                      undef,
+                                      $branch_rev);
 }
 
 =head2 B<get_directory_of()>
@@ -329,6 +336,7 @@ including any scheduled actions.  The possible states are:
   STATE_UPTODATE
   STATE_MODIFIED
   STATE_ABSENT
+  STATE_WILLCONFLICT
 
 =cut
 
@@ -339,7 +347,7 @@ sub get_rstate {
   # so wrap in an eval to catch this.
   my $remote_file;
   eval { $remote_file = $self->get_remote_object(); };
-  if ($@ && ($@ !~ /cvs server: nothing known about/)) {
+  if ($@ && ($@ !~ /cvs (server|log): nothing known about/)) {
     confess($@);
   }
 
@@ -360,13 +368,16 @@ sub get_rstate {
 
   return STATE_UPTODATE
     if $cmp == VCS::LibCVS::Datum::RevisionNumber::COMPARE_EQUAL;
-  return STATE_MODIFIED
-    if $cmp == VCS::LibCVS::Datum::RevisionNumber::COMPARE_GREATER;
+
+  if ( $cmp == VCS::LibCVS::Datum::RevisionNumber::COMPARE_DESCENDANT ) {
+    return $self->_will_conflict() ? STATE_WILLCONFLICT : STATE_MODIFIED;
+  }
 
   # Any other compare result is an error
 
-  confess ("Unexpected comparison for revisions: " . $tip_rev->as_string()
-           . " and " . $self->get_revision_number()->as_string());
+  confess ("Unexpected comparison result (" . $cmp . ") for revisions: "
+           . $tip_rev->as_string() . " and "
+           . $self->get_revision_number()->as_string());
 }
 
 =head2 B<get_revision_number()>
@@ -379,14 +390,27 @@ $w_file->get_revision_number()
 
 =back
 
-Return the revision number of the local file
+Return the revision number of the local file.
+
+When a file was imported and then checked out on the trunk, it will have a
+revision number of 1.1.1.1, and no sticky tag, and actually reside on the
+trunk.  This routine will hack that case to retun the revision 1.1.
 
 =cut
 
 sub get_revision_number {
   my $self = shift;
 
-  return $self->{Entry}->get_revision();
+  my $revision = $self->{Entry}->get_revision();
+
+  # Check for the annoying import revision number.
+  if (!defined $self->{Entry}->get_tag()
+      && $revision->branch_of()->is_import_branch()) {
+    while (!$revision->branch_of()->is_trunk()) {
+      $revision = $revision->branch_of()->base_of();
+    }
+  }
+  return $revision;
 }
 
 ###############################################################################
@@ -401,8 +425,7 @@ sub _is_modified {
 
   # Check file modification time, to save access in many cases
   my $updated_time = $self->{Entry}->get_updated_time();
-  my $mod_time = [ $self->_stat() ]->[9];
-  return 0 if ($mod_time <= $updated_time);
+  return 0 unless ($self->_changed_since($updated_time));
 
   # Create and issue a command to the server
   my $command = VCS::LibCVS::Command->new({}, "status", [], [$self]);
@@ -414,6 +437,32 @@ sub _is_modified {
   return $st[0] !~ /Up-to-date/;
 }
 
+# Consult the server to see if this file has modifications which conflict with
+# modifications in the repository.
+# Internal function for get_rstate()
+
+sub _will_conflict {
+  my $self = shift;
+
+  # Check file modification time, to save access in many cases
+  my $updated_time = $self->{Entry}->get_updated_time();
+  return 0 unless ($self->_changed_since($updated_time));
+
+  # Create and issue a command to the server
+  my $command = VCS::LibCVS::Command->new({}, "update", [], [$self]);
+  $command->issue($self->get_repository());
+
+  # To find the conflict, look in the entry line
+  my @files = $command->get_files();
+
+  # If no files were returned, no update is due, so there can't be a conflict.
+  return 0 if (@files == 0);
+
+  my $entry = $files[0]->{Args}[1];
+
+  return $entry->is_conflict();
+}
+
 # Consult CVS Admin files to see if the file had conflicts on merge
 # Internal function for get_state()
 # If it's been modified since the conflict time, assume they've been cleaned up
@@ -423,14 +472,20 @@ sub _is_modified {
 sub _had_conflicts {
   my $self = shift;
   my $conf_time = $self->{Entry}->get_conflict_time();
-  my $mod_time = [ $self->_stat() ]->[9];
 
-  return ($mod_time <= $conf_time);
+  return ! $self->_changed_since($conf_time);
 }
 
-# Call stat on self
-sub _stat {
-  return stat(shift->get_name());
+# Return true if the file has been changed since the given time
+# If stat() fails (the file is gone), then return false.
+sub _changed_since {
+  my $self = shift;
+  my $cmp_time = shift;
+
+  my $mod_time = [ stat($self->get_name()) ]->[9];
+
+  return 0 if ! defined $mod_time;
+  return ($mod_time > $cmp_time);
 }
 
 # Directory names for reporting to the server.

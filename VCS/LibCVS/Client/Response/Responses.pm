@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -33,7 +33,7 @@ each response.
 # valide responses.  This is so that the Valid-responses request knows what it
 # can report as valid responses.
 
-$VCS::LibCVS::Client::Response::Responses::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Response/Responses.pm,v 1.13 2003/06/27 20:52:33 dissent Exp $ ';
+$VCS::LibCVS::Client::Response::Responses::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Response/Responses.pm,v 1.14 2004/08/27 03:49:09 dissent Exp $ ';
 
 ###############################################################################
 # ok

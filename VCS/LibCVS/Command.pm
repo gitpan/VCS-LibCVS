@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -29,7 +29,7 @@ It is for internal LibCVS use only.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Command.pm,v 1.6 2003/06/26 19:50:38 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Command.pm,v 1.11 2004/08/31 02:32:48 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -42,7 +42,7 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Command.pm,v 1.6 
 # $self->{Options}    Hash ref of options with which the command was created.
 # $self->{AURequest}  VCS::LibCVS::Client::Request::ArgumentUsingRequest
 # $self->{CVSOptions} List ref of VCS::LibCVS::Client::Request::Argument
-# $self->{Files}      List ref of VCS::LibCVS::[Local](File|Directory)
+# $self->{Files}      List ref of VCS::LibCVS::[Working]FileOrDirectory
 # $self->{Responses}  List ref of VCS::LibCVS::Client::Response
 
 ###############################################################################
@@ -151,7 +151,11 @@ sub issue {
   my $repo = shift;
 
   ### Open the connection to the server
-  my $client = $repo->_get_client();
+
+  # See _get_client() for an explanation of why a server directory is passed in.
+  my $any_repo_dir = $self->{Files}->[0]->_get_repo_dirs()->[1];
+
+  my $client = $repo->_get_client($any_repo_dir);
 
   ### Send CVS options
   foreach my $opt (@{$self->{CVSOptions}}) {
@@ -290,11 +294,34 @@ the provided regexp.
 
 sub get_messages {
   my $self = shift;
-  my $p = shift || ".";
+  my $p = shift || "^";
 
   return map {
     ($_->get_message() =~ /$p/) ? $_->get_message : ();
   } $self->get_responses("VCS::LibCVS::Client::Response::M");
+}
+
+=head2 B<get_files()>
+
+@files = $command->get_files()
+
+=over 4
+
+=item return type: list of VCS::LibCVS::Client::Response
+
+=back
+
+Goes through all the reponses and returns those which are file transmissions.
+They are responses of type "Checked-in", "Merged", "Updated", . . .
+
+=cut
+
+sub get_files {
+  my $self = shift;
+
+  return map {
+    $self->get_responses("VCS::LibCVS::Client::Response::" . $_ );
+  } ("Checked_in", "Merged", "Updated");
 }
 
 ###############################################################################

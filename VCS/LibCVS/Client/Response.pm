@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -51,7 +51,7 @@ which it contains, returned as subclasses of LibCVS::Datum.  They
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Response.pm,v 1.21 2003/06/27 20:52:33 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Response.pm,v 1.25 2004/08/31 00:20:32 dissent Exp $ ';
 
 # Valid_responses is a list of all the responses in this implementation.
 # A response registers itself here in its BEGIN block.  It is needed by the
@@ -74,9 +74,9 @@ use vars ('@Valid_responses');
 
 =head1 CLASS ROUTINES
 
-=head2 B<read_from_server()>
+=head2 B<read_from_ioh()>
 
-@responses = Client::Response->read_from_server($conn)
+@responses = Client::Response->read_from_ioh($conn)
 
 Read a list of responses from the server.
 
@@ -84,9 +84,9 @@ Read a list of responses from the server.
 
 =item return type: a list of Client::Response
 
-=item argument 1 type: ::FileHandle
+=item argument 1 type: IO::Handle
 
-A ::FileHandle from which the list of responses should be read.  Typically this
+An IO::Handle from which the list of responses should be read.  Typically this
 will be a link directly from the server.
 
 =back
@@ -95,40 +95,47 @@ Reads a list of responses from the server, stopping when it receives an "ok" or
 "error".  This is the typical way to get a response.  The number of responses
 received is unpredictable, as additional responses may be included.
 
+It will block if there is not at least one response.
+
 =cut
 
 # It finds the correct class to create by converting the response name from the
 # server into a classname.  This means that the responses have to be named
 # predictably.
 #
-# This routine is recursive.
-#
 # It could check for constructors in the subtype by calling UNIVERSAL->can()
 
-sub read_from_fh {
+sub read_from_ioh {
   my $class = shift;
-  my $stream = shift;
+  my $ioh = shift;
 
-  # Get the name of the response
-  # and gobble the next character, which should be a newline or a space
-  my $response_name = "";
-  while ((my $char = $stream->getc()) =~ /\S/) {
-    $response_name .= $char;
-  }
+  my $cur_response;
+  my @responses;
 
-  # Convert respone name into a class name
-  my $response_class = $response_name;
-  $response_class =~ s/-/_/g;
-  $response_class = $class . "::" . $response_class;
+  # Loop until a terminal response is read.
+  do {
 
-  # Create the response of the appropriate type.  If it's unknown there has
-  # been a protocol breakdown and we don't know how to proceed, so we just die
-  my $response = $response_class->new($response_name, $stream);
+    # Get the name of the response
+    # and gobble the next character, which should be a newline or a space
+    my $response_name = "";
+    while ((my $char = $ioh->getc()) =~ /\S/) {
+      $response_name .= $char;
+    }
 
-  # A "terminal" responses indicate that we should stop looking for more.
-  return (  $response->terminal()
-          ? $response
-          : ($response, $class->read_from_fh($stream)));
+    # Convert response name into a class name
+    my $response_class = $response_name;
+    $response_class =~ s/-/_/g;
+    $response_class = $class . "::" . $response_class;
+
+    # Create the response of the appropriate type.  If it's unknown there has
+    # been a protocol breakdown and we don't know how to proceed, so we just die
+    $cur_response = $response_class->new($response_name, $ioh);
+
+    push @responses, $cur_response;
+
+  } while (! $cur_response->terminal());
+
+  return @responses;
 }
 
 =head2 B<new()>
@@ -143,11 +150,11 @@ Read a single response of the given name from the server.
 
 =item argument 1 type: scalar
 
-The name of the response as read from the $filehandle.
+The name of the response as read from the server.
 
-=item argument 2 type: ::FileHandle
+=item argument 2 type: IO::Handle
 
-A ::FileHandle from which the response should be read.  Typically this
+A IO::Handle from which the response should be read.  Typically this
 will be a link directly from the server.
 
 =back
@@ -156,19 +163,19 @@ Reads a single response from the server and creates an object for it.  This
 routine should only be called in read_from_server above.  Users of the libary
 should call that one, not this one.
 
-The name of the response has already been read from the filehandle.  It is
-similar but not identical to the class name of the response.  The only issue is
-that the '-' character has been replaced by '_'.
+The name of the response has already been read from the server.  It is similar
+but not identical to the class name of the response.  The only issue is that
+the '-' character has been replaced by '_'.
 
 =cut
 
 sub new {
-  my ($class, $name, $fh) = @_;
+  my ($class, $name, $ioh) = @_;
 
   my $that = bless {}, $class;
   $that->{ResponseName} = $name;
 
-  my @args = map { "VCS::LibCVS::Datum::$_"->new($fh); } $that->included_data;
+  my @args = map { "VCS::LibCVS::Datum::$_"->new($ioh); } $that->included_data;
   $that->{Args} = \@args;
 
   return $that;

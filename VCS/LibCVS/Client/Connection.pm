@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -10,24 +10,27 @@ package VCS::LibCVS::Client::Connection;
 use strict;
 use Carp;
 
+# If protocol debugging is enabled, use a subclass of IO::Handle which logs
+# traffic.
+use VCS::LibCVS::Client::LoggingIOHandle;
+
 =head1 NAME
 
 VCS::LibCVS::Client::Connection - a connection to a CVS server
 
 =head1 SYNOPSIS
 
-  my $conn = VCS::LibCVS::Client::Connection::SubClass->new();
+  my $conn = VCS::LibCVS::Client::Connection->new($root);
   my $client = VCS::LibCVS::Client->new($conn, "/home/cvs");
 
 =head1 DESCRIPTION
 
 A connection to a CVS server.  Its only real use is to construct a CVS client.
-It represents a generic connection, and so it cannot be instantiated, instead
-you must choose a protocol to connect with the server, and instantiate the
-appropriate subclass.
+It represents a generic connection, but has a constructor, which will
+instantiate the appropriate subclass.
 
 Once the connection is established, communication with the server takes place
-through a pair of ::FileHandles.
+through a pair of IO::Handles.
 
 =cut
 
@@ -35,7 +38,12 @@ through a pair of ::FileHandles.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection.pm,v 1.9 2003/06/27 20:52:33 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection.pm,v 1.18 2004/08/31 00:20:32 dissent Exp $ ';
+
+# Protocol_map is a map from protocol strings to subclasses of connection.
+# It's filled in by the subclasses, and accessed by the new_for_proto()
+# constructor
+use vars ('%Protocol_map');
 
 ###############################################################################
 # Private variables
@@ -44,14 +52,22 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection
 # Connection is a hash, and uses the following private entries.  The first
 # group can be accesed by the subclasses, the second group should not be.
 #
-# Accessible to subclasses:
+# Used by subclasses:
 #
-# FromServer => a ::FileHandle to read information from the server
-# ToServer   => a ::FileHandle to write information to the server
-#               These both must be set by subclasses upon connect().  They may
-#               be destroyed by them on disconnect()
+# SubFromServer => An IO::Handle to read information from the server
+# SubToServer   => An IO::Handle to write information to the server
+#                  These both must be set by subclasses upon connect().  They
+#                  may be destroyed by them on disconnect()
+#
+# Root => VCS::LibCVS::Datum::Root object
 #
 # Not Used by subclasses:
+#
+# These file handles may be the same as the ones set by the subclass, or may be
+# derived from them in order to do something else, like logging.
+#
+# FromServer => An IO::Handle to read information from the server
+# ToServer   => An IO::Handle to write information to the server
 #
 # Connected  => boolean, true if the Connection is connected
 #               managed in connect() and disconnect()
@@ -60,8 +76,41 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection
 # Class routines
 ###############################################################################
 
-# There is no constructor for this class.  You must choose one of its
-# subclasses to use.
+=head1 CLASS ROUTINES
+
+=head2 B<new()>
+
+$connection = VCS::LibCVS::Client::Connection->new($root);
+
+=over 4
+
+=item argument 1 type: VCS::LibCVS::Datum::Root
+
+=item return type: VCS::LibCVS::Client::Connection
+
+=back
+
+If the protocol is not supported, an exception will be thrown.
+
+=cut
+
+sub new {
+  my $class = shift;
+  my $root = shift;
+
+  # Instances of this class are never created, an instance of a subclass is
+  # created instead.
+  if ($class eq "VCS::LibCVS::Client::Connection") {
+    $class = $Protocol_map{$root->{Protocol}};
+    confess "Protocol $root->{Protocol} not supported" unless defined $class;
+    return $class->new($root);
+  }
+
+  # But there is a default constructor that subclasses can inherit.
+  my $that = bless {}, $class;
+  $that->{Root} = $root;
+  return $that;
+}
 
 ###############################################################################
 # Instance routines
@@ -79,17 +128,57 @@ $connection->connect()
 
 =back
 
-Opens this connection to the server.  After calling this, the ::FileHandles for
-accessing the server may be retrieved.
+Connect to the server.  After this, get_ioh_to_server and get_ioh_from_server
+may be called.  When the connection is no longer necessary, disconnect will get
+rid of it.
+
+Subclasses must override this method, and use it to set the SubFromServer and
+SubToServer private variables.  They must call this method at the beginning of
+their implementation, and connect_fin() at the end of it.
 
 =cut
 
 sub connect {
   my $self = shift;
+  return;
+}
+
+=pod
+
+=head2 B<connect_fin()>
+
+$connection->connect_fin()
+
+=over 4
+
+=item return type: undef
+
+=back
+
+Called by subclasses, once they have established the connection, and created
+the SubFromServer and SubToServer private variables.
+
+=cut
+
+sub connect_fin {
+  my $self = shift;
+
+  return if $self->{Connected};
   $self->{Connected} = 1;
+
+  # If requested, derive a logging IO from the provided one.
   if ($VCS::LibCVS::Client::DebugLevel & VCS::LibCVS::Client::DEBUG_PROTOCOL) {
+    $self->{ToServer} =
+      VCS::LibCVS::Client::LoggingIOHandle->new($self->{SubToServer});
     $self->{ToServer}->prefix("C: ");
+    $self->{ToServer}->logfile($VCS::LibCVS::Client::DebugOut);
+    $self->{FromServer} =
+      VCS::LibCVS::Client::LoggingIOHandle->new($self->{SubFromServer});
     $self->{FromServer}->prefix("S: ");
+    $self->{FromServer}->logfile($VCS::LibCVS::Client::DebugOut);
+  } else {
+    $self->{ToServer} = $self->{SubToServer};
+    $self->{FromServer} = $self->{SubFromServer};
   }
 }
 
@@ -105,36 +194,41 @@ $connection->disconnect()
 
 =back
 
-Closes this connection to the server.  ::FileHandles for communicating with the
+Closes this connection to the server.  IO::Handles for communicating with the
 server will no longer work.
 
 =cut
 
 sub disconnect {
   my $self = shift;
+  return if (!$self->{Connected});
+
   $self->{Connected} = 0;
+
+  delete $self->{ToServer};
+  delete $self->{FromServer};
 }
 
 =pod
 
-=head2 B<get_fh_to_server()>
+=head2 B<get_ioh_to_server()>
 
-$out_fh = $connection->get_fh_to_server();
+$out_ioh = $connection->get_ioh_to_server();
 
 =over 4
 
-=item return type: ::FileHandle
+=item return type: IO::Handle
 
 =back
 
-Returns an open writeable ::FileHandle.  Stuff written to it is sent to the
+Returns an open writeable IO::Handle.  Stuff written to it is sent to the
 server.
 
 The connection must be open to call this routine.
 
 =cut
 
-sub get_fh_to_server {
+sub get_ioh_to_server {
   my $self = shift;
 
   confess "Not connected" unless $self->connected();
@@ -144,23 +238,24 @@ sub get_fh_to_server {
 
 =pod
 
-=head2 B<get_fh_from_server()>
+=head2 B<get_ioh_from_server()>
 
-$in_fh = $connection->get_fh_from_server();
+$in_ioh = $connection->get_ioh_from_server();
 
 =over 4
 
-=item return type: ::FileHandle
+=item return type: IO::Handle
 
 =back
 
-Returns an open readable ::FileHandle.  Responses generated by the server are read from this ::FileHandle.
+Returns an open readable IO::Handle.  Responses generated by the server are
+read from this IO::Handle.
 
 The connection must be open to call this routine.
 
 =cut
 
-sub get_fh_from_server {
+sub get_ioh_from_server {
   my $self = shift;
 
   confess "Not connected" unless $self->connected();
@@ -189,6 +284,29 @@ sub connected {
   return $self->{Connected};
 }
 
+
+=pod
+
+=head2 B<get_root()>
+
+$cvsroot = $connection->get_root();
+
+=over 4
+
+=item return type: VCS::LibCVS::Datum::Root
+
+=back
+
+The root of the server that this is a connection to.
+
+=cut
+
+sub get_root {
+  my $self = shift;
+  return $self->{Root};
+}
+
+
 ###############################################################################
 # Private routines
 ###############################################################################
@@ -201,7 +319,9 @@ sub connected {
 
 sub DESTROY {
   my $self = shift;
-  $self->disconnect if $self->connected();
+
+  $self->{SubToServer}->close() if defined $self->{SubToServer};
+  $self->{SubFromServer}->close() if defined $self->{SubFromServer};
 }
 
 =pod

@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -111,7 +111,7 @@ The rest of this documentation is for the VCS::LibCVS::Client class itself.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client.pm,v 1.23 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client.pm,v 1.30 2004/08/31 01:56:34 dissent Exp $ ';
 
 # The default list of valid responses that the client will report
 use constant DEFAULT_VALID_RESPONSES =>
@@ -122,16 +122,21 @@ use constant DEFAULT_VALID_RESPONSES =>
    );
 
 # Turn on and off what to debug
-use vars ('$DebugLevel');
-$DebugLevel = 0;  # Bitmask indicating what debug info to output
+use vars ('$DebugLevel', '$DebugOut');
+$DebugLevel = 0;  # Bitmask indicating what debug info to output.
+# $DebugOut;        # Filename for debugging output.  Undef means STDERR.
 use constant DEBUG_PROTOCOL => 1;  # Print all the protocol data
+use constant DEBUG_OPTIONS  => 2;  # Print out any options
 
 # The rest of the VCS::LibCVS::Client classes.
 #
 # They use the constants defined above.
 
 use VCS::LibCVS::Client::Connection;
+use VCS::LibCVS::Client::Connection::CvsPass;
 use VCS::LibCVS::Client::Connection::Local;
+use VCS::LibCVS::Client::Connection::Ext;
+use VCS::LibCVS::Client::Connection::Pserver;
 use VCS::LibCVS::Client::Request;
 use VCS::LibCVS::Client::Request::Requests;
 use VCS::LibCVS::Client::Request::ArgumentUsingRequests;
@@ -158,6 +163,11 @@ use VCS::LibCVS::Client::Response::FileUpdateModifyingResponses;
 # ValidRequests  => hash ref.  Keys for each server supported request, values
 #                   of 0 or 1 indicating if the request is valid, as
 #                   reported by the server.
+# SingleCommand => boolean.  True means that the server can only support a
+#                  single command per connection.  In this case, the connection
+#                  should be reopened after each command.
+# TestDir => scalar string.  A directory on the server in which a lock file
+#            can be created for connection tests.
 
 ###############################################################################
 # Class routines
@@ -196,6 +206,7 @@ sub new {
   $that->{Root} = $root;
   $that->{Connection} = $conn;
   $that->{Connected} = 0;
+  $that->{TestDir} = ".";
 
   # Initialize the default valid responses
   $that->{ValidResponses} = {};
@@ -261,26 +272,10 @@ sub connect {
 
   confess "Client already connected to $self->{Root}" if $self->{Connected};
 
-  $self->{Connection}->connect();
+  # Test if multiple commands can be supported on this connection.
+  $self->_test_support_multiple_commands();
 
-  # Get the server's valid requests
-  $self->_submit_valid_requests();
-
-  # Tell the server what the valid responses are
-  my $vrsp_str = "";
-  while (my ($rsp_name, $on) = each %{$self->valid_responses}) {
-    $vrsp_str .= $rsp_name . " " if $on;
-  }
-  my $vrsp = VCS::LibCVS::Client::Request::Valid_responses->new([$vrsp_str]);
-  $self->submit_request($vrsp);
-
-  # Send the server my Root
-  my $root_request = VCS::LibCVS::Client::Request::Root->new([ $self->{Root} ]);
-  $self->submit_request($root_request);
-
-  # Tell the server what version of the protocol to use via UsaUnchanged
-  my $useu_request = VCS::LibCVS::Client::Request::UseUnchanged->new();
-  $self->submit_request($useu_request);
+  $self->_real_connect();
 
   $self->{Connected} = 1;
 
@@ -327,9 +322,7 @@ The client must be disconnected when you call this routine.
 sub init_repository {
   my $self = shift;
 
-  if ($self->{Connection}->connected()) {
-    confess "Must be disconnected to init a repository";
-  }
+  confess "Must be disconnected to init a repository" if $self->{Connected};
 
   $self->{Connection}->connect();
 
@@ -380,12 +373,23 @@ sub submit_request {
   confess "This request isn't supported by the server: " . $request->name()
     unless $self->{ValidRequests}->{$request->name()};
 
-  $request->protocol_print($self->{Connection}->get_fh_to_server());
+  $request->protocol_print($self->{Connection}->get_ioh_to_server());
 
   return () if (!$request->response_expected());
 
-  my $in = $self->{Connection}->get_fh_from_server();
-  return VCS::LibCVS::Client::Response->read_from_fh($in);
+  my $in = $self->{Connection}->get_ioh_from_server();
+  my @resps = VCS::LibCVS::Client::Response->read_from_ioh($in);
+
+  # If this was a command / argument using request, and the connection can't
+  # handle multiple commands, close and reopen it.
+
+  if (   $self->{SingleCommand}
+      && $request->isa("VCS::LibCVS::Client::Request::ArgumentUsingRequest")) {
+    $self->{Connection}->disconnect();
+    $self->_real_connect();
+  }
+
+  return @resps;
 }
 
 =head2 B<valid_responses()>
@@ -439,6 +443,34 @@ sub valid_requests {
   return $self->{ValidRequests};
 }
 
+=head2 B<testing_dir()>
+
+$testing_dir = $client->testing_dir($any_repo_dir)
+
+=over 4
+
+=item return type: scalar string directory name.  Relative or absolute.
+
+=back
+
+When a connection is created, the Client tests if the connection can support
+multiple commands.  This test requires a directory on the repository, in which
+it can create a lock file.  Unfortunately the root directory of the repository
+is not always writable, so you can provide a directory which is writeable,
+before the connection is made using this method.
+
+=cut
+
+sub testing_dir {
+  my $self = shift;
+  my $ntd = shift;
+  if ($ntd) {
+    $ntd =~ s/^$self->{Root}\///;
+    $self->{TestDir} = $ntd;
+  }
+  return $self->{TestDir};
+}
+
 ###############################################################################
 # Private routines
 ###############################################################################
@@ -471,6 +503,97 @@ sub _submit_valid_requests {
   }
 
   return;
+}
+
+# This does the actual work of connecting and doing initial negotiation with
+# the server.  to disconnect, call $self->{Connection}->disconnect();
+
+sub _real_connect() {
+  my $self = shift;
+
+  $self->{Connection}->connect();
+
+  # Get the server's valid requests
+  $self->_submit_valid_requests();
+
+  # Tell the server what the valid responses are
+  my $vrsp_str = "";
+  while (my ($rsp_name, $on) = each %{$self->valid_responses}) {
+    $vrsp_str .= $rsp_name . " " if $on;
+  }
+  my $vrsp = VCS::LibCVS::Client::Request::Valid_responses->new([$vrsp_str]);
+  $self->submit_request($vrsp);
+
+  # Send the server my Root
+  my $root_request = VCS::LibCVS::Client::Request::Root->new([ $self->{Root} ]);
+  $self->submit_request($root_request);
+
+  # Tell the server what version of the protocol to use via UseUnchanged
+  my $useu_request = VCS::LibCVS::Client::Request::UseUnchanged->new();
+  $self->submit_request($useu_request);
+}
+
+# Tests if the server can support multiple commands on a single connection, and
+# saves the result in a private variable.  The client must be disconnected to
+# call this routine.
+
+# This test is necessary because I have encountered broken loginfo scripts
+# which cause all commands after the first to fail.
+
+sub _test_support_multiple_commands {
+  my $self = shift;
+
+  $self->_real_connect();
+
+  # Try to send the same command twice and see if it fails.  I've chosen this
+  # command because it should be fast and not produce any output:
+  #   rdiff -l -r HEAD .
+
+  my $arg_l    = VCS::LibCVS::Client::Request::Argument->new("-l");
+  my $arg_r    = VCS::LibCVS::Client::Request::Argument->new("-r");
+  my $arg_head = VCS::LibCVS::Client::Request::Argument->new("HEAD");
+  my $arg_dir  = VCS::LibCVS::Client::Request::Argument->new($self->{TestDir});
+
+  my $command = VCS::LibCVS::Client::Request::rdiff->new();
+
+  $self->submit_request($arg_l);
+  $self->submit_request($arg_r);
+  $self->submit_request($arg_head);
+  $self->submit_request($arg_dir);
+  my @resps = $self->submit_request($command);
+
+  if (($resps[-1]->isa("VCS::LibCVS::Client::Response::error"))) {
+    my $errors;
+    foreach my $resp (@resps) { $errors .= ($resp->get_errors() || ""); };
+    confess "Request failed: \"$errors\"";
+  }
+
+  $self->submit_request($arg_l);
+  $self->submit_request($arg_r);
+  $self->submit_request($arg_head);
+  $self->submit_request($arg_dir);
+  @resps = $self->submit_request($command);
+
+  $self->{Connection}->disconnect();
+
+  $self->{SingleCommand} = 0;
+  if (($resps[-1]->isa("VCS::LibCVS::Client::Response::error"))) {
+    $self->{SingleCommand} = 1;
+  }
+  if ($VCS::LibCVS::Client::DebugLevel & VCS::LibCVS::Client::DEBUG_OPTIONS) {
+    my $cvsroot = $self->{Connection}->get_root()->as_string();
+    my $message = "LibCVS Client for $cvsroot " .
+      ($self->{SingleCommand}
+       ? "is using a new connection for each command"
+       : "is sending all commands over the same connection") . "\n";
+    if (defined $VCS::LibCVS::Client::DebugOut) {
+      open DEBUGOUT, ">> $VCS::LibCVS::Client::DebugOut";
+      print DEBUGOUT $message;
+      close DEBUGOUT;
+    } else {
+      print STDERR $message;
+    }
+  }
 }
 
 1;

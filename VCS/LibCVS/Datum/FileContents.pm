@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -10,7 +10,7 @@ package VCS::LibCVS::Datum::FileContents;
 use strict;
 use Carp;
 
-use FileHandle;
+use IO::File;
 
 =head1 NAME
 
@@ -41,7 +41,7 @@ differently from the others and it overrides most of the class routines.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/FileContents.pm,v 1.7 2003/06/27 20:52:33 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/FileContents.pm,v 1.9 2004/08/31 00:20:32 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::Datum");
@@ -71,10 +71,10 @@ $arg = Datum::FileContents->new($data)
 
 =over 2
 
-=item E<32>E<32>option 1: ::FileHandle
+=item E<32>E<32>option 1: IO::Handle
 
-A ::FileHandle object from which the file data will be read.  The file data
-must arrive over the ::FileHandle in the same manner as the CVS protocol, ie. a
+An IO::Handle object from which the file data will be read.  The file data
+must arrive over the IO::Handle in the same manner as the CVS protocol, ie. a
 file length in bytes followed by newline followed by the file transmission.
 
 =item E<32>E<32>option 2: scalar
@@ -96,7 +96,7 @@ entire contents of the file.
 
 =back
 
-Construct a new Datum::FileContents.  The ::FileHandle option is generally used
+Construct a new Datum::FileContents.  The IO::Handle option is generally used
 when reading responses from the server, the others when constructing requests.
 
 =cut
@@ -110,13 +110,13 @@ sub new {
   my $that = bless {}, $class;
 
   if (!ref($arg_data)) {
-    my $fh = FileHandle->new($arg_data, "r");
+    my $ioh = IO::File->new($arg_data, "r");
     $that->{Length} = (stat($arg_data))[7];
-    $that->_read_from_fh($fh);
-  } elsif (UNIVERSAL::isa($arg_data, "FileHandle")) {
+    $that->_read_from_ioh($ioh);
+  } elsif (UNIVERSAL::isa($arg_data, "IO::Handle")) {
     $that->{Length} = $arg_data->getline();
     chomp $that->{Length};
-    $that->_read_from_fh($arg_data);
+    $that->_read_from_ioh($arg_data);
   } elsif ((ref($arg_data) eq "HASH") && (my $scalar = $arg_data->{'scalar'})) {
     $that->{Length} = length $scalar;
     $that->{Contents} = $scalar;
@@ -160,8 +160,6 @@ $file_contents = $datum->as_protocol_string()
 
 =item return type: string scalar
 
-=item argument 1 type: FileHandle
-
 =back
 
 Returns the Datum::FileContents as a string suitable for being sent to the
@@ -178,16 +176,16 @@ sub as_protocol_string {
 # Private routines
 ###############################################################################
 
-# read data in from a file handle
+# read data in from an io handle
 # it expects to find the number of bytes to read in $self->{Length}
 # the data is put in $self->{Contents}
 
 # This doesn't handle network stuff very well.  read isn't properly documented,
 # but I assume that it's going to block on network stuff, and I'll have to muck
 # about with select and I don't want to do that.
-sub _read_from_fh {
-  my ($self, $fh) = @_;
-  my $num_bytes_read = $fh->read($self->{Contents}, $self->{Length});
+sub _read_from_ioh {
+  my ($self, $ioh) = @_;
+  my $num_bytes_read = $ioh->read($self->{Contents}, $self->{Length});
 
   confess "Error on read." if (!defined ($num_bytes_read));
   confess "Wrong number of bytes" if ($num_bytes_read != $self->{Length});

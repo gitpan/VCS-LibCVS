@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -27,6 +27,12 @@ revision numbers on the branch "0".
 The revision number "0" is used for added files, as well as for one of the
 trunk branches.
 
+I use the term "depth" to refer to the number of fields in a revision.  I use
+the terms "ancestor" and "descendant" to refer to a relationship between two
+revisions, whereby the intervening revisions increase monotonically.  Eg. 1.6
+is an ancestor of 1.19 and of 1.6.4.5, but 1.19 and 1.6.4.5 are neither
+ancestors nor descendants of each other.
+
 =head1 SUPERCLASS
 
 VCS::LibCVS::Datum
@@ -37,16 +43,18 @@ VCS::LibCVS::Datum
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/RevisionNumber.pm,v 1.9 2003/06/27 20:52:33 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/RevisionNumber.pm,v 1.14 2004/08/11 00:29:40 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::Datum");
 
 # COMPARE_* constants are documented in compare() routine
 use constant COMPARE_EQUAL => 0;
-use constant COMPARE_LESS => 1;
-use constant COMPARE_GREATER => 2;
+use constant COMPARE_ANCESTOR => 1;
+use constant COMPARE_DESCENDANT => 2;
 use constant COMPARE_INCOMPARABLE => 3;
+use constant COMPARE_POSSIBLE_ANCESTOR => 4;
+use constant COMPARE_POSSIBLE_DESCENDANT => 5;
 
 ###############################################################################
 # Class variables
@@ -56,8 +64,8 @@ use constant COMPARE_INCOMPARABLE => 3;
 # Private variables
 ###############################################################################
 
-# $self->{Number} is the number as a string, magic branch numbers are converted
-#                 to regular branch numbers.
+# $self->{Number} is the number as a string, with magic branch numbers
+#                 converted to regular branch numbers.
 # $self->{IsBranch} true if it's a branch revision number
 
 ###############################################################################
@@ -95,10 +103,10 @@ sub new {
   # Convert magic branch numbers to regular ones by removing the 0 in the
   # second to last place, unless it's the first number.
   $num =~ s/\.0(\.[0-9])*$/$1/;
+  $that->{Number} = $num;
 
   # It's a branch if there are an odd number of fields
-  $that->{IsBranch} = ((my @t = split(/\./, "$num")) % 2);
-  $that->{Number} = $num;
+  $that->{IsBranch} = ($that->_depth() % 2);
 
   return $that;
 }
@@ -190,6 +198,29 @@ sub is_trunk {
   return ($self->_depth() == 1);
 }
 
+=head2 B<is_import_branch()>
+
+if ($rev_num->is_import_branch()) { . . .
+
+=over 4
+
+=item return type: boolean scalar
+
+=back
+
+Return true if this is a branch revision number for an import branch, false
+otherwise.  An import branch is one with an odd revision number, which is
+assumed to be the result of an import.
+
+=cut
+
+sub is_import_branch {
+  my $self = shift;
+  return (   $self->{IsBranch}
+          && ($self->_depth() >= 3)
+          && ($self->_last_field() % 2 == 1));
+}
+
 =head2 B<branch_of()>
 
 $branch_num = $rev_num->branch_of()
@@ -221,16 +252,95 @@ $branch_num = $rev_num->base_of()
 
 =back
 
-Returns the RevisionNumber from which this branch starts.  If it's not a branch
-revision, or if it's the main branch an exception is thrown.
+Returns the RevisionNumber from which this branch starts.  If it's the trunk or
+a non-branch revision, an exception is thrown.
 
 =cut
 
 sub base_of {
   my $self = shift;
   confess "Only branch revisions have a base" unless $self->is_branch();
-  confess "Main branch has no base" if $self->{Number} =~ /^[0-9]+$/;
+  confess "Main branch has no base" if $self->_depth == 1;
   return $self->_subrevision();
+}
+
+=head2 B<first_revision_of()>
+
+$rev_num = $branch_num->first_revision_of()
+
+=over 4
+
+=item return type: VCS::LibCVS::Datum::RevisionNumber
+
+=back
+
+Returns the RevisionNumber of the first revision committed to this branch.
+This is not the same as the base of the branch, it's the branch number with a
+.1 appended.
+
+=cut
+
+sub first_revision_of {
+  my $self = shift;
+  confess "Only branches have a first revision" unless $self->is_branch();
+  return VCS::LibCVS::Datum::RevisionNumber->new($self->as_string() . ".1");
+}
+
+=head2 B<get_predecessor()>
+
+$p_rev_num = $rev_num->get_predecessor()
+
+=over 4
+
+=item return type: VCS::LibCVS::Datum::RevisionNumber
+
+=back
+
+Return the revision number that immediately preceeds this one, it's youngest
+ancestor.  Return undef if there isn't one.  Throw an exception if this is a
+branch revision.
+
+=cut
+
+sub get_predecessor {
+  my $self = shift;
+  if ($self->is_branch()) {
+    confess "Branches don't have predecessors.";
+  }
+  if ($self->_last_field != 1) {
+    my $rvstr = $self->_subrevision_string() . "." . ($self->_last_field() - 1);
+    return VCS::LibCVS::Datum::RevisionNumber->new($rvstr);
+  } else {
+    if ($self->branch_of()->is_trunk()) {
+      return;
+    } else {
+      return $self->branch_of()->base_of();
+    }
+  }
+}
+
+=head2 B<get_successor()>
+
+$p_rev_num = $rev_num->get_successor()
+
+=over 4
+
+=item return type: VCS::LibCVS::Datum::RevisionNumber
+
+=back
+
+Return the revision number on the same branch that immediately follows this
+one, it's eldest descendant.  Throw an exception if this is a branch revision.
+
+=cut
+
+sub get_successor {
+  my $self = shift;
+  if ($self->is_branch()) {
+    confess "Branches don't have successors.";
+  }
+  my $rvstr = $self->_subrevision_string() . "." . ($self->_last_field() + 1);
+  return VCS::LibCVS::Datum::RevisionNumber->new($rvstr);
 }
 
 =head2 B<compare()>
@@ -255,28 +365,43 @@ The meanings of the return values are:
 
 They are the same revision number.
 
-=item COMPARE_LESS
+=item COMPARE_ANCESTOR
 
-The argument is less than this.
+The argument is an ancestor of this.
 
-=item COMPARE_GREATER
+=item COMPARE_DESCENDANT
 
-The argument is greater than this.
+The argument is a descendant of this.
+
+=item COMPARE_POSSIBLE_ANCESTOR
+
+The argument is possibly an ancestor of this.
+
+=item COMPARE_POSSIBLE_DESCENDANT
+
+The argument is possibly a descendant of this.
 
 =item COMPARE_INCOMPARABLE
 
-This and the argument are incomparable.
+The argument is neither an ancestor, nor a descendant of this, and they aren't
+equal.
 
 =back
 
 Both branch and regular revision numbers can be compared this way.  A branch
-revision number is less than all revisions on it (except its base revision) and
-its subbranches.  So 1.6.2 is greater than 1.6, less than 1.6.2.4, and
-incomparable with 1.7.
+revision number is an ancestor of all revisions on it (except its base
+revision) and its subbranches.  So 1.6.2 is an ancestor of 1.6.2.4, a
+descendant of 1.6, and incomparable with 1.7.
 
-It would be nice if 1.6.2 were less than 1.6, since it's on the branch, but
-then we'd lose transitivity, since 1.6.2 < 1.6, 1.6 < 1.7, but 1.6.2 and 1.7
-are incomparable.
+Branches that sprout from the same revision are possibly ancestors or
+descendants.  However, this can't be known because of CVS's lazy branching.  In
+this case, the values returned are COMPARE_POSSIBLE_ANCESTOR and
+COMPARE_POSSIBLE_DESCENDANT.  For example, 1.11.4 is possibly and ancestor of
+1.11.6.
+
+It would be nice if 1.6 were a descendant of 1.6.2, since it's on that branch,
+but then we'd lose transitivity, because then we'd have 1.6.2 < 1.6, 1.6 < 1.7,
+but 1.6.2 and 1.7 are incomparable.
 
 =cut
 
@@ -292,18 +417,25 @@ sub compare {
   # revisions
   if ($self->_depth() == $other->_depth()) {
     # Check for trivial equality
-    if ($self->as_string() eq ($other->as_string)) {
+    if ($self->equals($other)) {
       return COMPARE_EQUAL;
     }
-    # Branches of the same depth that aren't equal are incomparable
+    # Branches of the same depth that sprout from different revisions are
+    # incomparable.  If they sprout from the same revision they are possibly
+    # related.
     if ($self->is_branch()) {
-      return COMPARE_INCOMPARABLE;
+      if (! $self->base_of()->equals($other->base_of())) {
+        return COMPARE_INCOMPARABLE;
+      } else {
+        return ($other->_last_field > $self->_last_field)
+          ? COMPARE_POSSIBLE_DESCENDANT : COMPARE_POSSIBLE_ANCESTOR;
+      }
     }
     # For revisions, check that they are on the same branch, then check their
     # last field
-    if ($self->branch_of()->compare($other->branch_of) == COMPARE_EQUAL) {
+    if ($self->branch_of()->equals($other->branch_of)) {
       return ($other->_last_field > $self->_last_field)
-        ? COMPARE_GREATER : COMPARE_LESS;
+        ? COMPARE_DESCENDANT : COMPARE_ANCESTOR;
     }
     # They are revisions on different branches
     return COMPARE_INCOMPARABLE;
@@ -315,29 +447,32 @@ sub compare {
   # then compare them.
   my $shallow_rev = ($self->_depth > $other->_depth) ? $other : $self;
   my $deep_rev = ($self->_depth > $other->_depth) ? $self : $other;
+  # $less_deep_rev is the ancestor of $deep_rev with the same depth as
+  # $shallow_rev
   my $less_deep_rev = $deep_rev;
   while ($shallow_rev->_depth() != $less_deep_rev->_depth()) {
     $less_deep_rev = $less_deep_rev->_subrevision();
   }
 
-  # Compare the revisions, and then change the result to be correct for
-  # $shallow_rev->compare($deep_rev)
+  # Compare $shallow_rev and $less_deep_rev
   my $result = $shallow_rev->compare($less_deep_rev);
 
+  # Adjust $result to be correct for $shallow_rev->compare($deep_rev)
   # eg $shallow_rev is 1.6, $deep_rev is 1.6.4.3
-  $result = COMPARE_GREATER if ($result == COMPARE_EQUAL);
+  $result = COMPARE_DESCENDANT if ($result == COMPARE_EQUAL);
 
   # eg $shallow_rev is 1.4, $deep_rev is 1.6.4.3
-  $result = COMPARE_GREATER if ($result == COMPARE_GREATER);
+  $result = COMPARE_DESCENDANT if ($result == COMPARE_DESCENDANT);
 
   # eg $shallow_rev is 1.8, $deep_rev is 1.6.4.3
-  $result = COMPARE_INCOMPARABLE if ($result == COMPARE_LESS);
+  $result = COMPARE_INCOMPARABLE if ($result == COMPARE_ANCESTOR);
 
   $result = COMPARE_INCOMPARABLE if ($result == COMPARE_INCOMPARABLE);
 
-  # Switch GREATER to LESS if we did our compare the wrong way
-  if (($self->_depth > $other->_depth) && $result == COMPARE_GREATER) {
-    $result = COMPARE_LESS;
+  # Adjust $result to be correct for $self->compare($other)
+  # Only COMPARE_DESCENDANT and COMPARE_INCOMPARABLE are possible
+  if (($self->_depth > $other->_depth) && $result == COMPARE_DESCENDANT) {
+    $result = COMPARE_ANCESTOR;
   }
   return $result;
 }
@@ -346,14 +481,19 @@ sub compare {
 # Private routines
 ###############################################################################
 
-# Used by branch_of and base_of, create new revision number with one less field
-sub _subrevision {
+# Create new revision number with one less field, as a string
+sub _subrevision_string {
   my $self = shift;
   my ($sub_num) = ($self->{Number} =~ /^(.*)\.[0-9]+$/);
-  return VCS::LibCVS::Datum::RevisionNumber->new($sub_num);
+  return $sub_num;
 }
 
-# Get the depth of the revision, the number of fields.
+# Create new RevisionNumber with one less field
+sub _subrevision {
+  return VCS::LibCVS::Datum::RevisionNumber->new(shift->_subrevision_string());
+}
+
+# Get the depth of the revision, ie. the number of fields.
 sub _depth {
   my $self = shift;
   my $depth = (my @t = split(/\./, "$self->{Number}"));

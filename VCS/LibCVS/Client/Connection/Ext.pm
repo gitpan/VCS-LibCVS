@@ -5,7 +5,7 @@
 # and/or modify it under the same terms as Perl itself.
 #
 
-package VCS::LibCVS::Client::Connection::Local;
+package VCS::LibCVS::Client::Connection::Ext;
 
 use strict;
 use Carp;
@@ -13,7 +13,7 @@ use IPC::Open2;
 
 =head1 NAME
 
-VCS::LibCVS::Client::Connection::Local - a connection to a local cvs server
+VCS::LibCVS::Client::Connection::Ext - a connection to a remote cvs server
 
 =head1 SYNOPSIS
 
@@ -21,10 +21,12 @@ VCS::LibCVS::Client::Connection::Local - a connection to a local cvs server
 
 =head1 DESCRIPTION
 
-A connection to an invocation of "cvs server" on the localhost.  See
+A connection to an invocation of "cvs server" on a remote machine.  See
 VCS::LibCVS::Client::Connection for an explanation of the API.
 
-No authentication is required to establish this connection.
+The connection to the remove machine is established through an external
+program.  The default is "ssh", but it can be overridden by setting the
+environment variable CVS_RSH.
 
 =head1 SUPERCLASS
 
@@ -36,7 +38,7 @@ No authentication is required to establish this connection.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection/Local.pm,v 1.14 2004/08/31 00:20:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection/Ext.pm,v 1.5 2004/08/31 00:20:32 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::Client::Connection");
@@ -47,16 +49,15 @@ use vars ('@ISA');
 
 # register which protocols this subclass supports.
 sub BEGIN {
-  my $class = "VCS::LibCVS::Client::Connection::Local";
-  $VCS::LibCVS::Client::Connection::Protocol_map{"local"} = $class;
-  $VCS::LibCVS::Client::Connection::Protocol_map{"fork"} = $class;
+  my $class = "VCS::LibCVS::Client::Connection::Ext";
+  $VCS::LibCVS::Client::Connection::Protocol_map{"ext"} = $class;
 }
 
 ###############################################################################
 # Private variables
 ###############################################################################
 
-# $self->{PID}  The process Id of the child process.
+# $self->{Root}  VCS::LibCVS::Datum::Root object for my repository.
 
 ###############################################################################
 # Class routines
@@ -72,11 +73,17 @@ sub connect {
   return if $self->connected();
 
   $self->SUPER::connect();
+
+  my $user = $self->{Root}->{UserName};
+  my $user_arg = (defined $user) ? ('-l ' . $user) : "";
+
+  my $command = ('${CVS_RSH:-ssh} ' .
+                 $user_arg .
+                 ' ' . $self->{Root}->{HostName} .
+                 ' ${CVS_SERVER:-cvs} server');
   $self->{SubFromServer} = IO::Handle->new();
   $self->{SubToServer} = IO::Handle->new();
-  $self->{PID} = IPC::Open2::open2($self->{SubFromServer},
-                                   $self->{SubToServer},
-                                   "cvs server");
+  IPC::Open2::open2($self->{SubFromServer}, $self->{SubToServer}, $command);
   $self->connect_fin();
 }
 
@@ -88,7 +95,6 @@ sub disconnect {
   $self->SUPER::disconnect();
   $self->{SubFromServer}->close();
   $self->{SubToServer}->close();
-  waitpid ($self->{PID}, 0);
 }
 
 ###############################################################################

@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -44,7 +44,7 @@ of LibCVS::Datum.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Admin.pm,v 1.11 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Admin.pm,v 1.16 2004/08/31 00:20:32 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -96,6 +96,7 @@ sub new {
   my $that = bless {}, $class;
   $that->{DirName} = $dir;
   $that->{AdminDirName} = $admin_dir;
+
   return $that;
 }
 
@@ -138,21 +139,53 @@ keys are filenames as strings, values are VCS::LibCVS::Datum::Entry
 =back
 
 Returns the list of CVS managed files in the directory.  They are stored in a
-hash with filenames as keys and LibCVS::Datum::Entry objects as values.
+hash with relative filenames as keys and LibCVS::Datum::Entry objects as values.
 
 =cut
 
 sub get_Entries {
   my $self = shift;
 
-  my $filename = $self->{AdminDirName} . "/Entries";
+  # A line with just a D, means that subdirectories have not been recorded.
+  # Remember if it's found, and look for them manually.
+  my $sub_dirs_not_included = 0;
+
+  my $filename = File::Spec->catpath('', $self->{AdminDirName}, "Entries");
   my $fh = FileHandle->new($filename);
+  confess "Couldn't open $filename" unless defined $fh;
   my $entries = {};
   foreach my $entry_line ($fh->getlines()) {
-    next if $entry_line =~ /^D$/; # skip unusual entry line that's just a D
+    if ($entry_line =~ /^D$/) {
+      $sub_dirs_not_included = 1;
+      next;
+    }
     my $entry = VCS::LibCVS::Datum::Entry->new($entry_line);
     $entries->{$entry->name} = $entry;
   }
+
+  # Do the manual check for directories if necessary.
+  if ($sub_dirs_not_included) {
+    # Get the name of the parent directory.
+    my @splitdirs = File::Spec->splitdir($self->{AdminDirName});
+    pop @splitdirs;
+    my $parent = File::Spec->catdir(@splitdirs);
+
+    # Traverse all of its directory entries.
+    my $parent_dir = IO::Dir->new($parent) || confess("Can't opendir $parent");
+    foreach my $subdir ($parent_dir->read()) {
+      next if $subdir =~ /\.\.?/;
+      next if $subdir eq $VCS::LibCVS::Admin_Dir_Name;
+      # Skip it if it was already found in the Entries file.
+      next if defined $entries->{$subdir};
+      # Skip it unless it has a subdirectory called CVS.
+      next unless
+        -d File::Spec->catdir(($parent, $subdir, $VCS::LibCVS::Admin_Dir_Name));
+
+      # Create a new entry for it.
+      $entries->{$subdir} = VCS::LibCVS::Datum::Entry->new("D/$subdir////");
+    }
+  }
+
   return $entries;
 }
 
@@ -188,7 +221,8 @@ $rep_dir = $admin->get_Repository()
 
 =back
 
-Returns the name of the repository directory for this directory.
+Returns the name of the repository directory for this directory, relative to
+the root of the repository.
 
 =cut
 
@@ -197,7 +231,10 @@ sub get_Repository {
 
   my $filename = $self->{AdminDirName} . "/Repository";
   my $fh = FileHandle->new($filename);
-  return VCS::LibCVS::Datum::DirectoryName->new($fh->getline);
+  my $repodir = $fh->getline();
+  my $root = $self->get_Root()->as_string();
+  $repodir =~ s#^$root/(.*)#$1#;
+  return VCS::LibCVS::Datum::DirectoryName->new($repodir);
 }
 
 =head2 B<get_Tag()>

@@ -1,25 +1,28 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright 2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
 #
 
-package VCS::LibCVS::FileSticky;
+package VCS::LibCVS::StickyRevision;
 
 use strict;
 use Carp;
 
 =head1 NAME
 
-VCS::LibCVS::FileSticky - A sticky data referenced file revision.
+VCS::LibCVS::StickyRevision - A sticky revision across the repository.
 
 =head1 SYNOPSIS
 
 =head1 DESCRIPTION
 
-Represents a single revision of a file managed by CVS, as indexed by a sticky,
-either a date or a non-branch tag.
+A Sticky which is specified by a revision number.
+
+=head1 SUPERCLASS
+
+VCS::LibCVS::Sticky
 
 =cut
 
@@ -27,7 +30,10 @@ either a date or a non-branch tag.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/FileSticky.pm,v 1.4 2004/08/27 03:49:09 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/StickyRevision.pm,v 1.1 2004/03/22 00:19:01 dissent Exp $ ';
+
+use vars ('@ISA');
+@ISA = ("VCS::LibCVS::Sticky");
 
 ###############################################################################
 # Class variables
@@ -37,8 +43,8 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/FileSticky.pm,v 1
 # Private variables
 ###############################################################################
 
-# $self->{FileRevision}     VCS::LibCVS::FileRevision of this sticky
-# $self->{Sticky}           VCS::LibCVS::Sticky the sticky data
+# $self->{Repository} VCS::LibCVS::Repository
+# $self->{Revision}   string scalar
 
 ###############################################################################
 # Class routines
@@ -48,15 +54,15 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/FileSticky.pm,v 1
 
 =head2 B<new()>
 
-$file_sticky = VCS::LibCVS::FileSticky->new($file_revision, $sticky)
+$sticky_revision = VCS::LibCVS::StickyRevision->new($repository, $revision)
 
 =over 4
 
-=item return type: VCS::LibCVS::FileSticky
+=item return type: VCS::LibCVS::StickyRevision
 
-=item argument 1 type: VCS::LibCVS::FileRevision
+=item argument 1 type: VCS::LibCVS::Repository
 
-=item argument 2 type: VCS::LibCVS::Sticky
+=item argument 2 type: string scalar
 
 =back
 
@@ -64,12 +70,8 @@ $file_sticky = VCS::LibCVS::FileSticky->new($file_revision, $sticky)
 
 sub new {
   my $class = shift;
-  my ($file_revision, $sticky) = @_;
   my $that = bless {}, $class;
-
-  $that->{FileRevision} = $file_revision;
-  $that->{Sticky} = $sticky;
-
+  ($that->{Repository}, $that->{Revision}) = @_;
   return $that;
 }
 
@@ -79,41 +81,49 @@ sub new {
 
 =head1 INSTANCE ROUTINES
 
-=head2 B<get_file_revision()>
+=head2 B<get_repository()>
 
-$file_rev = $file_sticky->get_file_revision()
-
-=over 4
-
-=item return type: VCS::LibCVS::FileRevision
-
-=back
-
-=cut
-
-sub get_file_revision() {
-  return shift->{FileRevision};
-}
-
-=head2 B<get_sticky()>
-
-$sticky = $file_sticky->get_sticky()
+$tag = $sticky_tag->get_repository()
 
 =over 4
 
-=item return type: VCS::LibCVS::Sticky
+=item return type: VCS::LibCVS::Repository
 
 =back
 
+Returns the repository for this sticky tag
+
 =cut
 
-sub get_sticky() {
-  return shift->{Sticky};
+sub get_repository {
+  my $self = shift;
+  return $self->{Repository};
 }
+
+=head2 B<get_revision()>
+
+$revision = $sticky->get_revision()
+
+=over 4
+
+=item return type: string scalar
+
+=back
+
+Returns the revision number for this sticky revision
+
+=cut
+
+sub get_revision {
+  my $self = shift;
+  return $self->{Revision};
+}
+
 
 ###############################################################################
 # Private routines
 ###############################################################################
+
 
 =head1 SEE ALSO
 

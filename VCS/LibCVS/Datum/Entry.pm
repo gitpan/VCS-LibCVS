@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -25,6 +25,13 @@ An RCS style Entries Line:
 
   / NAME / VERSION / CONFLICT / OPTIONS / TAG_OR_DATE
 
+This format is used in two places.  The CVS/Entries file, and in data returned
+by the server.  The format can be slightly different in each of these cases.
+
+In particular, the server can return a CONFLICT of "+=" when a new conflict is
+being reported, but this shouldn't be stored in the Entries file.  Instead a
+proper timestamp should be used.
+
 =head1 SUPERCLASS
 
 VCS::LibCVS::Datum
@@ -35,7 +42,7 @@ VCS::LibCVS::Datum
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/Entry.pm,v 1.12 2003/06/27 20:52:33 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/Entry.pm,v 1.17 2004/08/31 00:20:32 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::Datum");
@@ -52,7 +59,7 @@ use vars ('@ISA');
 # $self->{Type}          the type of the entry, "Directory" or "File"
 # $self->{FileName}      the name of the file to which this entry refers
 # $self->{Revision}      the revision of the file
-# $self->{ConflictField} conflict info
+# $self->{Conflict}      conflict info
 # $self->{Merge}         "No", "Merge" or "Conflict": if CVS merged the file
 # $self->{Date}          from conflict info.  When CVS last changed the file
 #                        in seconds since the epoch
@@ -85,6 +92,7 @@ sub new {
     # /Initial <filename>/ if it's a newly added file
     # /Result of merge/ if the file was merged without conflicts
     # /Result of merge+Sun Apr  6 02:47:18 2003/ for conflicts on merge
+    # /+=/ for conflicts on merge, returned by server.  (Date is same as file)
     # /Sun Apr  6 02:24:57 2003/ to indicate when CVS made it up to date
 
     if ($that->{Conflict} =~ /^$/) {
@@ -93,6 +101,8 @@ sub new {
         unless $that->{Revision} eq "0";
     } elsif ($that->{Conflict} =~ /^Result of merge$/) {
       $that->{Merge} = "Merge";
+    } elsif ($that->{Conflict} =~ /^\+=$/) {
+      $that->{Merge} = "Conflict";
     } elsif ($that->{Conflict} =~ /^Result of merge\+(.*)$/) {
       $that->{Merge} = "Conflict";
       $that->{Date} = _date_to_secs($1);
@@ -142,12 +152,13 @@ $tag = $entry->get_tag()
 
 =back
 
-Returns the tagspec for this entry
+Returns the tagspec for this entry, or undef if there's no tag.
 
 =cut
 
 sub get_tag {
   my $self = shift;
+  return undef unless $self->{Tag};
   return VCS::LibCVS::Datum::TagSpec->new($self->{Tag});
 }
 
@@ -189,6 +200,25 @@ Returns true if the entry represents a file
 sub is_file {
   my $self = shift;
   return $self->{Type} eq "File";
+}
+
+=head2 B<is_directory()>
+
+if ($entry->is_directory()) {
+
+=over 4
+
+=item return type: boolean scalar
+
+=back
+
+Returns true if the entry represents a directory
+
+=cut
+
+sub is_directory {
+  my $self = shift;
+  return $self->{Type} eq "Directory";
 }
 
 =head2 B<get_updated_time()>
@@ -238,16 +268,41 @@ unresolved conflicts in it.
 
 If the file did not have conflicts inserted into it, 0 is returned.
 
+If this is a new conflict being reported, and the file has not yet been written
+to disk, there is no time, so undef is returned.  This happens in Entry lines
+being returned from the server.
+
 =cut
 
 sub get_conflict_time {
   my $self = shift;
 
-  # if $self->{Merge} is other than "Conflict" ("Merge" or "No") then no
+  # if $self->{Merge} is other than "Conflict" (either "Merge" or "No") then no
   # conflicts have been inserted into this file.  So, just return 0 to show
   # there are no conflicts.  Otherwise, return the date.
 
   return ($self->{Merge} eq "Conflict") ? $self->{Date} : 0;
+}
+
+=head2 B<is_conflict()>
+
+if ( $entry->is_conflict() ) . . .
+
+=over 4
+
+=item return type: boolean
+
+=back
+
+Return true if this Entry is for a file with a conflict.  This can ba a file on
+disk with a conflict written into it.  Or one being returned from the server.
+
+=cut
+
+sub is_conflict {
+  my $self = shift;
+
+  return ($self->{Merge} eq "Conflict");
 }
 
 
@@ -267,7 +322,7 @@ sub _date_to_secs {
 
   $month = {'Jan' => 0, 'Feb' => 1, 'Mar' => 2, 'Apr' => 3,
             'May' => 4, 'Jun' => 5, 'Jul' => 6, 'Aug' => 7,
-            'Sep' => 8, 'Oct' => 9, 'Nov' => 10, 'Dec' => 12}->{$month};
+            'Sep' => 8, 'Oct' => 9, 'Nov' => 10, 'Dec' => 11}->{$month};
   return timegm($second, $minute, $hour, $day, $month, $year);
 }
 

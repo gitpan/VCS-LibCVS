@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ RepositoryDirectory which inherit from it.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryFileOrDirectory.pm,v 1.7 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryFileOrDirectory.pm,v 1.11 2004/08/31 00:20:32 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -52,24 +52,53 @@ use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryFileOrD
 
 =head1 CLASS ROUTINES
 
-=head2 B<new()>
+=head2 B<find()>
 
-$rep_obj = VCS::LibCVS::RepositoryFileOrDirectory->new($repository, $name)
+$rep_obj = VCS::LibCVS::RepositoryFileOrDirectory->find($repository, $name)
 
 =over 4
 
-=item return type: VCS::LibCVS::RepositoryFileOrDirectory
+=item return type: subclass of VCS::LibCVS::RepositoryFileOrDirectory
 
 =item argument 1 type: VCS::LibCVS::Repository
 
 =item argument 2 type: string scalar
 
-The path of the object within the repository.  It must refer to something
-within the repository.
+The path of a file or directory within the repository.
 
 =back
 
+It will return either a VCS::LibCVS::RepositoryDirectory or
+VCS::LibCVS::RepositoryFile object, depending on what the second argument
+names.
+
 =cut
+
+sub find {
+  my $class = shift;
+
+  # First see if it's already in the repository cache
+  if ($VCS::LibCVS::Cache_RepositoryFileOrDirectory) {
+    my ($repo, $path) = @_;
+    my $cache = $repo->{RepositoryFileOrDirectoryCache};
+    return $cache->{$path} if $cache->{$path};
+  }
+
+  my $file_or_dir;
+  # Try to load it as a file, if an exception is thrown, then it's a directory.
+  eval { $file_or_dir = VCS::LibCVS::RepositoryFile->new(@_); };
+  if ($@) {
+    if ($@ !~ /^Empty log, .* is a directory/) {
+      confess($@);
+    }
+    $file_or_dir = VCS::LibCVS::RepositoryDirectory->new(@_);
+  }
+
+  return $file_or_dir;
+}
+
+# This constructor is private, there's no reason for anything except the
+# subclasses to call it.
 
 sub new {
   my $class = shift;
@@ -187,6 +216,31 @@ sub get_directory_of {
   # totally screws up if there is a ".." in there.  See issue 47.
   my $dir = ($self->get_name({no_base => 1})) || ".";
   return VCS::LibCVS::RepositoryDirectory->new($self->{Repository}, $dir);
+}
+
+=head2 B<equals()>
+
+if ($ford1->equals($ford2)) {
+
+=over 4
+
+=item return type: boolean
+
+=item argument 1 type: VCS::LibCVS::RepositoryFileOrDirectory
+
+=back
+
+Returns true if this and the other "f or d" represent the same thing in the
+repository.
+
+=cut
+
+sub equals {
+  my $self = shift;
+  my $other = shift;
+
+  return (   $self->{Repository}->equals($other->{Repository})
+          && ($self->{FileSpec} eq $other->{FileSpec}));
 }
 
 ###############################################################################

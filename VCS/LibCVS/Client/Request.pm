@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -40,7 +40,7 @@ than those must not be submitted to the server.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Request.pm,v 1.19 2003/06/27 20:52:33 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Request.pm,v 1.21 2004/08/31 00:20:32 dissent Exp $ ';
 
 # Valid_requests is a list of all the requests in this implementation.
 # A request registers itself here in its BEGIN block.  It is needed to populate
@@ -165,11 +165,11 @@ $request->protocol_print($file_handle)
 
 =item return type: undef
 
-=item argument 1 type: ::FileHandle
+=item argument 1 type: IO::Handle
 
 =back
 
-Prints the Request to the FileHandle.  The output will be formatted for sending
+Prints the Request to the IO::Handle.  The output will be formatted for sending
 to the cvs server, including the placement of newlines.
 
 =cut
@@ -177,15 +177,15 @@ to the cvs server, including the placement of newlines.
 # it doesn't use the as_string routine, because we will need to add streaming
 
 sub protocol_print {
-  my ($self, $fh) = @_;
+  my ($self, $ioh) = @_;
   my $args = $self->{Args};
 
-  $fh->print($self->{RequestName} . " ") || confess "print 1 to fh failed";
+  $ioh->print($self->{RequestName} . " ") || confess "print 1 to ioh failed";
 
   # Each Datum ends it submit with a newline.  So if there are none, add one
-  ($fh->print("\n") || confess "print 2 to fh failed") if (!@$args);
+  ($ioh->print("\n") || confess "print 2 to ioh failed") if (!@$args);
 
-  map { $_->protocol_print($fh) || confess "print 3 to fh failed"; } @$args;
+  map { $_->protocol_print($ioh) || confess "print 3 to ioh failed"; } @$args;
 }
 
 =head2 B<as_protocol_string()>

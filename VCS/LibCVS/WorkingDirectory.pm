@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -32,7 +32,7 @@ VCS::LibCVS::WorkingFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingDirectory.pm,v 1.5 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingDirectory.pm,v 1.8 2004/08/31 00:20:32 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::WorkingFileOrDirectory");
@@ -118,7 +118,7 @@ $l_files = $l_dir->get_files()
 =item return type: ref to hash
 
 keys are filenames relative to this directory, as strings, values are
-VCS::LibCVS::WorkingFile
+objects of type VCS::LibCVS::WorkingFile.
 
 =back
 
@@ -172,7 +172,7 @@ $u_files = $l_dir->get_unmanaged_files()
 =item return type: ref to hash
 
 keys are the names of files, relative to this directory.  values are objects of
-type VCS::LibCVS::WorkingUnmanagedFile
+type VCS::LibCVS::WorkingUnmanagedFile.
 
 =back
 
@@ -191,7 +191,7 @@ sub get_unmanaged_files {
   my $m_files = $self->get_files();
 
   # To check if files are to be ignored
-  my $ignorer = VCS::LibCVS::IgnoreChecker->new($self->get_repository());
+  my $ignorer = $self->get_repository()->get_ignoreChecker();
 
   # All files in the directory
   my $dir = IO::Dir->new($self->get_name());
@@ -211,6 +211,38 @@ sub get_unmanaged_files {
   }
 
   return \%u_files;
+}
+
+=head2 B<get_directories()>
+
+$s_dirs = $l_dir->get_directories()
+
+=over 4
+
+=item return type: ref to hash
+
+keys are the names of directories, relative to this directory.  values are
+objects of type VCS::LibCVS::WorkingDirectory.
+
+=back
+
+Returns the CVS managed directories in this directory, as specified locally in
+the CVS sandbox administrative directory.
+
+=cut
+
+sub get_directories {
+  my $self = shift;
+  my $entries = $self->{Admin}->get_Entries();
+  my %dirs;
+  foreach my $name (keys %$entries) {
+    # Ignore any non-directories in the list
+    if ( $entries->{$name}->is_directory() ) {
+      my $full_name = File::Spec->catfile($self->get_name, $name);
+      $dirs{$name} = VCS::LibCVS::WorkingDirectory->new($full_name);
+    }
+  }
+  return \%dirs;
 }
 
 ###############################################################################

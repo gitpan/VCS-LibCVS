@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ VCS::LibCVS::RepositoryFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryFile.pm,v 1.4 2003/06/27 20:52:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryFile.pm,v 1.12 2004/08/31 00:20:32 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::RepositoryFileOrDirectory");
@@ -61,9 +61,15 @@ sub new {
 
   my $that = $class->SUPER::new(@_);
 
-  # Do a repository action, so that the constructor will throw an exception if
-  # the file doesn't exist.
-  $that->_load_log_messages();
+  my ($repo, $path) = @_;
+
+  # Make sure that the file exists, by performing a repository action.  If it
+  # doesn't exist, remove it from the cache.
+  eval { $that->_load_log_messages(); };
+  if ($@) {
+    delete $repo->{RepositoryFileOrDirectoryCache}->{$that->{FileSpec}};
+    confess($@);
+  }
 
   return $that;
 }
@@ -81,7 +87,7 @@ $files_tags = $cvs_file->get_tags()
 
 =over 4
 
-=item return type: ref to list of LibCVS::FileSticky
+=item return type: ref to list of VCS::LibCVS::FileSticky
 
 =back
 
@@ -93,17 +99,36 @@ sub get_tags {
   my $self = shift;
   my @ret_tags;
 
-  my $all_tags = $self->_get_all_tags();
-  foreach my $tag (keys (%$all_tags)) {
-    if (   $all_tags->{$tag}->[0]->get_type()
-        eq VCS::LibCVS::Datum::TagSpec::TYPE_NONBRANCH) {
-      my $sticky = VCS::LibCVS::StickyTag->new($self->{Repository},
-                                               $all_tags->{$tag}->[0]->{Tag});
-      my $rev = VCS::LibCVS::FileRevision->new($self, $all_tags->{$tag}->[1]);
-      push @ret_tags, VCS::LibCVS::FileSticky->new($rev, $sticky);
-    }
+  foreach my $taginfo (values (%{$self->_get_all_tags()})) {
+    my $s = $self->_make_FileSticky($taginfo);
+    push(@ret_tags, $s) if ($s);
   }
   return \@ret_tags;
+}
+
+=head2 B<get_tag($name)>
+
+$files_tag = $cvs_file->get_tag("foo_tag")
+
+=over 4
+
+=item return type: object of type VCS::LibCVS::FileSticky
+
+=back
+
+Returns a named non-branch tag on the file.  Or undef if there is no such tag.
+
+=cut
+
+sub get_tag {
+  my $self = shift;
+  my $name = shift;
+
+  my $taginfo = $self->_get_all_tags()->{$name};
+  if ($taginfo) {
+    return $self->_make_FileSticky($taginfo);
+  }
+  return;
 }
 
 =head2 B<get_branches()>
@@ -118,8 +143,8 @@ $files_branches = $cvs_file->get_branches()
 
 Returns a list of all the named branches of the file.
 
-This will not include branches that don't have names, such as the main branch.
-Doing that adds a lot more work to this routine.
+This includes the revision 1 trunk, with the name .TRUNK, but does not include
+any other unnamed branches.
 
 =cut
 
@@ -127,18 +152,65 @@ sub get_branches {
   my $self = shift;
   my @ret_branches;
 
-  my $all_tags = $self->_get_all_tags();
-  foreach my $tag (keys (%$all_tags)) {
-    if (   $all_tags->{$tag}->[0]->get_type()
-        eq VCS::LibCVS::Datum::TagSpec::TYPE_BRANCH) {
-      push @ret_branches, VCS::LibCVS::FileBranch->new($self,
-                                                       $all_tags->{$tag}->[0],
-                                                       $all_tags->{$tag}->[1]);
-    }
+  foreach my $taginfo (values (%{$self->_get_all_tags()})) {
+    my $b = $self->_make_FileBranch($taginfo);
+    push(@ret_branches, $b) if ($b);
   }
+  # Put the trunk into the list
+  push(@ret_branches, $self->_make_FileBranch_Trunk());
   return \@ret_branches;
 }
 
+=head2 B<get_branch($name_or_rev_or_branch)>
+
+$files_branch = $cvs_file->get_branch("branch_1_1_4_stabilization")
+
+=over 4
+
+=item argument 1 type: scalar or VCS::LibCVS::Datum::RevisionNumber or VCS::LibCVS::Branch
+
+=item return type: object of type VCS::LibCVS::FileBranch
+
+=back
+
+Return the specified branch, or undef if there is no such branch.  The branch
+can be specified by a name, a branch revision number, or a Branch.
+
+=cut
+
+sub get_branch {
+  my $self = shift;
+  my $arg = shift;
+
+  if (! ref $arg) {
+    if ($arg eq ".TRUNK") { return $self->_make_FileBranch_Trunk(); }
+    my $taginfo = $self->_get_all_tags()->{$arg};
+    return $self->_make_FileBranch($taginfo) if $taginfo;
+
+  } elsif ($arg->isa("VCS::LibCVS::Branch")) {
+    if ($arg->get_name() eq ".TRUNK") { return $self->_make_FileBranch_Trunk(); }
+    my $taginfo = $self->_get_all_tags()->{$arg->get_name()};
+    return $self->_make_FileBranch($taginfo) if $taginfo;
+
+  } elsif ($arg->isa("VCS::LibCVS::Datum::RevisionNumber")) {
+    my $rev = $arg;
+    if (! $rev->is_branch()) {
+      confess "Not a branch revision: " . $rev->as_string();
+    }
+    if ($rev->is_trunk()) {
+      return $self->_make_FileBranch_Trunk($rev);
+    }
+    foreach my $taginfo (values (%{$self->_get_all_tags()})) {
+      if ($taginfo->[1]->equals($rev)) {
+        return $self->_make_FileBranch($taginfo);
+      }
+    }
+  } else {
+    confess "get_branch() doesn't support objects of type " . ref $arg;
+  }
+
+  return;
+}
 
 =head2 B<get_revision()>
 
@@ -146,16 +218,17 @@ $files_rev = $cvs_file->get_revision($sticky_info)
 
 =over 4
 
-=item return type: VCS::LibCVS::FileRevision
-
 =item argument 1 type: VCS::LibCVS::Sticky
+
+=item return type: VCS::LibCVS::FileRevision
 
 =back
 
 Returns the revision of the file specified by the sticky info.
 
-It doesn't handle the BASE tag.  The object model means it doesn't really
-belong here, but in the LocalFile object.  I hope this isn't a problem.
+The BASE tag is not supported, since this is a repository object with no
+knowledge of the working directory.  The LocalFile object will provide the
+necessary information.
 
 =cut
 
@@ -163,13 +236,16 @@ sub get_revision {
   my $self = shift;
   my $sticky = shift;
 
-  my $rev_number;
+  my $rev;
 
   # Each type of sticky data requires different behaviour
   if (ref($sticky) eq "VCS::LibCVS::StickyTag") {
-    $rev_number = $self->_get_all_tags()->{$sticky->get_tag}->[1];
-    return VCS::LibCVS::FileRevision->new($self, $rev_number);
+    $rev = $self->_get_all_tags()->{$sticky->get_tag}->[1];
+  } elsif (ref($sticky) eq "VCS::LibCVS::StickyRevision") {
+    $rev = VCS::LibCVS::Datum::RevisionNumber->new($sticky->get_revision());
   }
+
+  return VCS::LibCVS::FileRevision->new($self, $rev);
 }
 
 ###############################################################################
@@ -230,6 +306,45 @@ sub _load_tags {
   $self->{Tags} = \%tags;
 }
 
+# make a FileSticky from a $self->{Tags} entry.  Return undef if it's not a
+# NONBRANCH tag.
+
+sub _make_FileSticky {
+  my ($self, $tags_entry) = @_;
+
+  my ($tagspec, $revnum) = @{ $tags_entry };
+
+  if ($tagspec->get_type() eq VCS::LibCVS::Datum::TagSpec::TYPE_NONBRANCH) {
+    my $s = VCS::LibCVS::StickyTag->new($self->{Repository}, $tagspec->{Name});
+    my $r = VCS::LibCVS::FileRevision->new($self, $revnum);
+    return VCS::LibCVS::FileSticky->new($r, $s);
+  }
+  return;
+}
+
+# make a FileBranch from a $self->{Tags} entry.  Return undef if it's not a
+# BRANCH tag.
+
+sub _make_FileBranch {
+  my ($self, $tags_entry) = @_;
+
+  my ($tagspec, $revnum) = @{ $tags_entry };
+
+  if ($tagspec->get_type() eq VCS::LibCVS::Datum::TagSpec::TYPE_BRANCH) {
+    return VCS::LibCVS::FileBranch->new($self, $tagspec, $revnum);
+  }
+  return;
+}
+
+# make a FileBranch object for the trunk.
+
+sub _make_FileBranch_Trunk {
+  my $self = shift;
+  my $rev = shift || VCS::LibCVS::Datum::RevisionNumber->new("1");
+  my $tagspec = VCS::LibCVS::Datum::TagSpec->new("T.TRUNK");
+  return VCS::LibCVS::FileBranch->new($self, $tagspec, $rev);
+}
+
 # get the log messages from private variables
 # use this function instead of direct access to make it easier to add caching
 sub _get_log_messages {
@@ -265,7 +380,8 @@ sub _load_log_messages {
   # So it is processed by traversing the responses until we hit the string
   # "description:", after which log messages are split by ------ lines
 
-  my %logs;
+  confess "Empty log, $self->{FileSpec} is a directory" if ( @$loginfo == 0);
+
   # eat up everything up to and including the "description:" line
   while ( @$loginfo ) {
     last if (shift @$loginfo) eq "description:";
@@ -273,6 +389,8 @@ sub _load_log_messages {
   # the last line will be a bunch of ==, remove it now:
   my $last = pop @$loginfo;
   confess "Bad final log line: $last" unless $last =~ /={77}/;
+
+  my %logs;
   my $log_entry_sep = qr/-{28}/;
   while (@$loginfo) {
     my $f_l = shift @$loginfo;

@@ -1,5 +1,5 @@
 #
-# Copyright 2003 Alexander Taler (dissent@0--0.org)
+# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -22,7 +22,7 @@ VCS::LibCVS::Datum::Root - A CVS datum for a CVS Root specification
 
 A CVS Root specification.
 
-  [ : <protocol> : [ <username> @ <hostname> : ] ] <rootdir>
+  [ : <protocol> : [ <username> @ <hostname> [ : <port> ] ] ] <rootdir>
 
 If only the rootdir is specified, protocol will be reported as "local".
 
@@ -36,7 +36,7 @@ VCS::LibCVS::Datum
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/Root.pm,v 1.7 2003/06/27 20:52:33 dissent Exp $ ';
+use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Datum/Root.pm,v 1.15 2004/08/31 03:16:08 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::Datum");
@@ -49,9 +49,10 @@ use vars ('@ISA');
 # Private variables
 ###############################################################################
 
-# $self->{Protocol}  "local", "ext", "pserver"
+# $self->{Protocol}  "local", "ext", "pserver", . . .
 # $self->{UserName}  for ext and pserver
 # $self->{HostName}  for ext and pserver
+# $self->{Port}      for ext and pserver
 # $self->{RootDir}
 
 ###############################################################################
@@ -63,11 +64,32 @@ sub new {
 
   my $that = $class->SUPER::new(@_);
 
-  if ($that->{Root} =~ /^(:(.*):((.*)@(.*):)?)?(.*)$/) {
-    $that->{Protocol} = $2 || "local";
-    $that->{UserName} = $4;
-    $that->{HostName} = $5;
+  # If it starts with a /, it's a local directory name.
+  if ($that->{Root} =~ m/^\//) {
+    $that->{Protocol} = "local";
+    $that->{RootDir}  = $that->{Root};
+
+  # If it starts with a :, then the protocol has been specified, and the
+  # hostname is optional.
+  } elsif ($that->{Root} =~ /^:[^\/]+\//) {
+    $that->{Root} =~ /^:([^:]*):?(([^\@]*)\@)?([^:\/]*)(:([0-9]*))?(\/.*)$/;
+    $that->{Protocol} = $1;
+    $that->{UserName} = $3;
+    $that->{HostName} = $4;
+    $that->{Port}     = $6;
+    $that->{RootDir}  = $7;
+
+  # Otherwise it's remote without the protocol specified, starting with the
+  # hostname.  This allows for the perverse case, where there are no :'s, such
+  # as fire/var/cvs which is on host fire, in directory /var/cvs.
+  } elsif ($that->{Root} =~ /^[^\/]+\//) {
+    $that->{Root} =~ /^(([^\@]*)\@)?([^:\/]*)(:([0-9]*))?(\/.*)$/;
+    $that->{Protocol} = "ext";
+    $that->{UserName} = $2;
+    $that->{HostName} = $3;
+    $that->{Port}     = $5;
     $that->{RootDir}  = $6;
+
   } else {
     confess "Couldn't parse Root: $that->{Root}";
   }
