@@ -1,0 +1,68 @@
+                        LibCVS Version Perl-1.00.00 (1.0000_0)
+
+This is alpha software.  Use at your own risk. 
+
+DESCRIPTION
+
+LibCVS provides access to CVS working directories and repositories.  This is
+the Perl version of LibCVS.  See http://libcvs.cvshome.org.
+
+Take a look at the example script: examples/lcvs-example.
+
+A lot of effort has been putinto the documentation, so please use perldoc.  If
+something isn't clear in the docs, please report it, so we can fix it up.
+
+
+MAJOR LIMITATIONS
+
+At present LibCVS can only connect to local CVS repositories.  No pserver, no
+ssh.  This will change in the next release.  I'm pushing it out without these
+abilities to get across the idea that it is early alpha, so that you don't try
+it out on production repositories just yet.  Right now I want feedback.
+
+The tests are not yet thorough.  The only tests are for the script lcvs-st.
+
+Performance is poor.
+
+The example script, lcvs-st, could have a lot more features.
+
+The interface _will_ change.  I will change function signatures, and object
+names.
+
+PREREQUISITES
+
+* You will need Perl installed.  I've developed with Perl 5.6.1, but it will
+  probably work with others too.
+
+* You will need CVS installed.  I've developed with CVS 1.11.6, but it will
+  probably work with others too.  (http://www.cvshome.org/)
+
+
+INSTALLATION
+
+    $ ./Makefile.PL
+
+    $ make test
+
+    # make install
+
+Or, possibly, use the CPAN shell:
+
+  # perl -MCPAN -e shell
+  cpan> install VCS::LibCVS
+
+
+MAJOR CHANGES
+
+This is a first release so there are no changes.
+
+
+TODO
+
+Lots!  For the next release I want to deal with all of the major limitations
+listed above.
+
+The complete list of Todo's is on the issue section of
+http://libcvs.cvshome.org/
+
+
