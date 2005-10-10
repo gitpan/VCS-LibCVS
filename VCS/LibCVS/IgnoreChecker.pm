@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -35,7 +35,7 @@ See the CVS info page for which files are ignored.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/IgnoreChecker.pm,v 1.6 2004/08/27 03:49:09 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/IgnoreChecker.pm,v 1.9 2005/10/10 12:52:11 dissent Exp $ ';
 
 use constant DEFAULT_IGNORE_LIST =>
   ( 'RCS', 'SCCS', 'CVS', 'CVS.adm',
@@ -100,8 +100,7 @@ sub new {
   # if it's not there, we catch the exception
   eval {
     my $r_ig = VCS::LibCVS::RepositoryFile->new($that->{Repository}, "CVSROOT/cvsignore");
-    my $head_sticky = VCS::LibCVS::StickyTag->new($that->{Repository}, "HEAD");
-    my $r_ig_file_rev = $r_ig->get_revision($head_sticky);
+    my $r_ig_file_rev = $r_ig->get_revision("HEAD");
     my $r_patterns = $r_ig_file_rev->get_contents()->as_string();
     $that->_append_patterns($that->{GlobalList}, split(/\s/,$r_patterns));
   };

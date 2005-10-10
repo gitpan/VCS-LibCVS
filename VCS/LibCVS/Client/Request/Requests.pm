@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -32,7 +32,7 @@ name for each request.
 
 =cut
 
-$VCS::LibCVS::Client::Request::Requests::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Request/Requests.pm,v 1.21 2004/08/27 03:49:09 dissent Exp $ ';
+$VCS::LibCVS::Client::Request::Requests::REVISION = '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Client/Request/Requests.pm,v 1.23 2005/10/10 12:52:11 dissent Exp $ ';
 
 ###############################################################################
 # Root

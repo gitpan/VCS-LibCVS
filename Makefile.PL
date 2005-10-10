@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -13,6 +13,10 @@ WriteMakefile( ABSTRACT_FROM => "VCS/LibCVS.pm",
                AUTHOR => 'Alexander Taler <dissent@cpan.org>',
                NAME => "VCS::LibCVS",
                VERSION_FROM => "VCS/LibCVS.pm",
+               EXE_FILES => [ "examples/lcvs-logsummary",
+                              "examples/lcvs-st",
+                              "examples/lcvs-tagbase",
+                              "examples/lcvs-version" ],
                depend => { Makefile => '$(VERSION_FROM)' },
                dist => { DIST_DEFAULT => 'MANIFEST permissions tardist' },
              );
@@ -51,12 +55,12 @@ ChangeLog: .FORCE
 					print "\n*** No predecessor to release $$release\n\n"; \
 					exit(1);\
 				} \
-				$$rel_tag = "Release-Perl-$$major-$$minor-$$rel"; \
+				$$rel_tag = "Release-$$major-$$minor-$$rel"; \
 				$$pre = $$rel - 1; $$pre = "0$$pre" if ($$pre < 10); \
-				$$pre_tag = "Release-Perl-$$major-$$minor-$$pre"; \
+				$$pre_tag = "Release-$$major-$$minor-$$pre"; \
 				system "./examples/lcvs-logsummary \
 					-t $$pre_tag -t $$rel_tag \
-					libcvs/Perl > ChangeLog-Perl-$$major-$$minor-$$rel"; \
+					libcvs-perl > ChangeLog-$$major-$$minor-$$rel"; \
 				exit(0); \
 			}    \
 		} \

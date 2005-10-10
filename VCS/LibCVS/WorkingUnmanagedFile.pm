@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ VCS::LibCVS::WorkingFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingUnmanagedFile.pm,v 1.6 2004/08/31 00:20:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/WorkingUnmanagedFile.pm,v 1.9 2005/10/10 12:52:11 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::WorkingFileOrDirectory");
@@ -106,9 +106,9 @@ if ($u_file->is_in_the_way()) {
 
 =back
 
-Returns true if there is a file in the repository with the same name as this
-file.  This file is in the way because it prevents the update from the
-repository.
+Returns true if there is a file or a directory in the repository with the same
+name as this file.  This file is in the way because it prevents the update from
+the repository.
 
 An unusual case occurs if this file has the same contents as the one in the
 repository.  In this case, "cvs update" will add the local administrative
@@ -117,20 +117,18 @@ in that case.
 
 =cut
 
-# Perhaps make it return an enumerated state.  See issue 49.
-
-# What if there's a directory with the same name.  See issue 50.
+# Perhaps make it return an enumerated state.  See bug #14189.
 
 sub is_in_the_way {
   my $self = shift;
 
-  my $repo = $self->get_repository();
-  my $repo_dir = $self->{Admin}->get_Repository()->{DirectoryName};
-  my $name = $self->get_name({no_dir => 1 });
-  my $repo_file = File::Spec::Unix->catfile($repo_dir, $name);
-  # constructor throws an exception if remote object doesn't exist
-  eval { VCS::LibCVS::RepositoryFile->new($repo, $repo_file); };
-  return ($@) ? 0 : 1;
+  # Issue an update command.  If it returns "nothing known about", then the
+  # file is not in the way.  In any other case it is in the way, either because
+  # a directory is there, or another file.
+  my $up_c = new VCS::LibCVS::Command({}, "update", ["-ld"], [$self]);
+  $up_c->issue($self->get_repository());
+  my @errors = $up_c->get_errors("nothing known about");
+  return !@errors;
 }
 
 ###############################################################################
@@ -142,5 +140,17 @@ sub is_in_the_way {
   VCS::LibCVS
 
 =cut
+
+# Directory names for reporting to the server.
+# Routine called in Command.pm, see there for more details.
+sub _get_repo_dirs {
+  my $self = shift;
+  my $l_dir = $self->get_name({no_base => 1});
+  my $root_repo_dir = $self->{Admin}->get_Root()->{RootDir};
+  my $within_repo_dir = $self->{Admin}->get_Repository()->as_string();
+  my $r_dir = File::Spec::Unix->catdir($root_repo_dir, $within_repo_dir);
+
+  return [ $l_dir, $r_dir ];
+}
 
 1;

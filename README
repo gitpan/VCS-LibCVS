@@ -1,8 +1,8 @@
-                        LibCVS Version Perl-1.00.01 (1.0001_0)
+                        LibCVS Perl Version 1.00.02 (1.0002_0)
 
 This is alpha software.  Use at your own risk. 
 
-Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 
 All rights reserved. This program is free software; you can redistribute it
 and/or modify it under the same terms as Perl itself.
@@ -10,28 +10,30 @@ and/or modify it under the same terms as Perl itself.
 
 DESCRIPTION
 
-LibCVS provides access to CVS working directories and repositories.  This is
-the Perl version of LibCVS.  See http://libcvs.cvshome.org.  If you are using
-LibCVS please let us know, we are keen to help.
+LibCVS Perl provides access to CVS working directories and repositories.  See
+http://www.nongnu.org/libcvs-perl/.  If you are using LibCVS please let us
+know, we are keen to help.
 
-It also ships with two useful scripts: lcvs-logsummary which transforms CVS
+It also ships with three useful scripts: lcvs-logsummary which transforms CVS
 commit logs into ChangeLog format, grouping multiple file commits into a single
-entry; lcvs-st which prints out an exhaustive status of files in a working
+entry; lcvs-tagbase which tags the base revision of a branch for specified
+files; lcvs-st which prints out an exhaustive status of files in a working
 directory.
 
-To learn LibCVS, the script examples/lcvs-example is a good place to start.
-
-A lot of effort has been put into the documentation, so please use perldoc.  If
-something isn't clear in the docs, please report it, so we can fix it up.
+To learn how to write scripts with LibCVS, you can start with the documentation
+or the example script examples/lcvs-example.  A lot of effort has been put into
+the pod documentation, so please use it.  If something isn't clear in the docs,
+please report it, so it can be fixed.
 
 
 MAJOR LIMITATIONS
 
-The current version provides read-only access, it won't modify your working
-directory, nor your repository.  Ways to modify them will come in later
-releases when I'm more comfortable that the core is working properly.
+The current version provides almost no write access, it won't modify your
+working directory, nor your repository, except that it can apply tags.
+Subsequent releases will include functionality for modifying both the
+repository and the working directory.
 
-The tests are not yet thorough.  The only tests are for the script lcvs-st.
+The tests are not yet thorough, they only cover the lcvs-st script.
 
 Performance is poor.
 
@@ -42,7 +44,7 @@ function names and function signatures.
 
 PREREQUISITES
 
-* You will need Perl installed.  I've developed with Perl 5.6.1 and 5.8.0, but
+* You will need Perl installed.  I've developed with Perl 5.6.1 and 5.8.*, but
   it will probably work with others too.
 
 * For remote repository access, CVS is not required.  For local access it is.
@@ -66,72 +68,39 @@ Or, possibly, use the CPAN shell:
 
 CHANGES
 
-This section includes changes to the library interface, and internal changes
-that may affect users.  For a complete list of changes since the previous
-release, look in the ChangeLog-Perl-* file.  For a list of fixed bugs, see the
-issues tracker on http://libcvs.cvshome.org/.
+This section includes changes that may affect users since the last release,
+both to the library interface, and internal changes.  For a complete list of
+changes since the previous release, look in the ChangeLog-* file.  Also see the
+bug tracker at https://savannah.nongnu.org/projects/libcvs-perl/.
 
-  * Support for pserver and ext/SSH connections.
+API changes:
 
-  * A new authentication callback system.
+  * Added VCS::LibCVS::Slice, which can be used to apply tags.
 
-  * Include the trunk as .TRUNK in many places.
+  * Remove Sticky* classes which were useless and just cluttered the code.
 
-  * Many functions for traversing the branch structure.
+  * Indicate internal routies using an _ prefix.
 
-  * Cache IgnoreChecker objects.
+  * Added get_branch().
 
-  * Support new date format from cvs 1.12 series.
+Non-API changes:
 
-  * WorkingFile can be queried about impending conflicts.
+  * Added new script lcvs-tagbase, which is used to apply tags to the base of
+    existing branches.
 
-  * Update terminology for comparing revisions.  LESS -> ANCESTOR,
-    GREATER -> DESCENDANT
+  * Better parsing of CVSROOTs.
 
-  * Add DEBUG_OPTIONS debugging level to Client.
+  * Better parsing for confusing log files.
 
-Details of all the interface changes:
+  * More flexibility when testing repositories for multiple command support.
 
-  * New class Branch
+  * Fix a broken case in get_file_branch() if the branch had no revisions.
 
-  * Add equals() to many classes.
-
-  * Other new routines:
-
-      + Entry->is_directory()
-      + FileBranch->get_branch()
-      + FileBranch->get_first_revision()
-      + FileBranch->get_parent()
-      + FileBranch->get_precedes()
-      + FileBranch->get_revision()
-      + FileBranch->is_trunk()
-      + FileRevision->compare()
-      + FileRevision->equals()
-      + FileRevision->get_file_branch()
-      + FileRevision->get_predecessor()
-      + FileRevision->get_successor()
-      + FileRevision->get_time()
-      + FileRevision->get_time_string()
-      + FileRevision->is_dead()
-      + RepositoryDirectory->get_file()
-      + RepositoryDirectory->get_files()
-      + RepositoryFile->get_branch()
-      + RepositoryFile->get_tag()
-      + RepositoryFileOrDirectory->find()
-      + RevisionNumber->first_revision_of()
-      + RevisionNumber->get_predecessor()
-      + RevisionNumber->get_successor()
-      + RevisionNumber->is_import_branch()
-      + WorkingDirectory->add_directories()
-
-
+  * WorkingUnmanagedFile->is_in_the_way() supports being in the way of 
+    directory now.
 
 TODO
 
 Lots!  For the next release I want to deal with all of the major limitations
-listed above.
-
-The complete list of Todo's is on the issue section of
-http://libcvs.cvshome.org/
-
+listed above.  Also check the bug tracker at Savannah.
 

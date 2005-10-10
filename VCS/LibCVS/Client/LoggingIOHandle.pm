@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -19,7 +19,7 @@ use IO::Handle;
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/LoggingIOHandle.pm,v 1.3 2004/08/31 00:20:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Client/LoggingIOHandle.pm,v 1.5 2005/10/10 12:52:11 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("IO::Handle");

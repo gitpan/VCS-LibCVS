@@ -1,6 +1,6 @@
 # -*- CPerl -*-
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -39,6 +39,7 @@ $dirname = File::Spec->rel2abs( $dirname );
 # set up the test repository
 my $base = (    $ENV{LCVS_ST_T_TEST_REPO_DIR}
             || tempdir("libcvs-lcvs_st_t-XXXXXX", TMPDIR => 1, CLEANUP => 1));
+system("chmod +x $dirname/lcvs-st.t-setup.sh");
 ok(! system("$dirname/lcvs-st.t-setup.sh $base"));
 
 # get the right lcvs-st and include path

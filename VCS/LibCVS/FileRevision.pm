@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -26,7 +26,7 @@ Represents a single revision of a file managed by CVS.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/FileRevision.pm,v 1.22 2004/08/31 00:20:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/FileRevision.pm,v 1.25 2005/10/10 12:52:11 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -192,7 +192,7 @@ $time = $file_rev->get_time()
 =back
 
 Returns the time that this particular revision was committed, as seconds since
-Midnight January 1 1970.
+midnight January 1 1970.
 
 =cut
 
@@ -449,6 +449,16 @@ sub _get_log_message {
     $self->{LogMessage} = $self->{File}->_get_log_messages()->{$rev_num_str};
   }
   return $self->{LogMessage};
+}
+
+# Returns an Entry, like from the Entries file for this FileRevision.
+
+sub _get_entry {
+  my $self = shift;
+  my $name = $self->{File}->get_name({'no_dir' => 1});
+  my $revnum = $self->{RevisionNumber}->as_string();
+  my $date = "Wed Jan 31 02:14:08 1973";
+  return VCS::LibCVS::Datum::Entry->new("/$name/$revnum/$date//");
 }
 
 =head1 SEE ALSO

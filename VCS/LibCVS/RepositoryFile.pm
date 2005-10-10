@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ VCS::LibCVS::RepositoryFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryFile.pm,v 1.12 2004/08/31 00:20:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/RepositoryFile.pm,v 1.18 2005/10/10 12:52:11 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::RepositoryFileOrDirectory");
@@ -87,7 +87,7 @@ $files_tags = $cvs_file->get_tags()
 
 =over 4
 
-=item return type: ref to list of VCS::LibCVS::FileSticky
+=item return type: ref to list of scalar strings.
 
 =back
 
@@ -100,33 +100,36 @@ sub get_tags {
   my @ret_tags;
 
   foreach my $taginfo (values (%{$self->_get_all_tags()})) {
-    my $s = $self->_make_FileSticky($taginfo);
-    push(@ret_tags, $s) if ($s);
+    my ($tagspec, $revnum) = @{ $taginfo };
+    if ($tagspec->get_type() eq VCS::LibCVS::Datum::TagSpec::TYPE_NONBRANCH) {
+      push(@ret_tags, $tagspec->get_name());
+    }
   }
   return \@ret_tags;
 }
 
-=head2 B<get_tag($name)>
+=head2 B<has_tag($name)>
 
-$files_tag = $cvs_file->get_tag("foo_tag")
+if ($cvs_file->has_tag("foo_tag")) { . . .
 
 =over 4
 
-=item return type: object of type VCS::LibCVS::FileSticky
+=item return type: scalar boolean
 
 =back
 
-Returns a named non-branch tag on the file.  Or undef if there is no such tag.
+Returns true if the file has a non-branch tag by that name.
 
 =cut
 
-sub get_tag {
+sub has_tag {
   my $self = shift;
   my $name = shift;
 
   my $taginfo = $self->_get_all_tags()->{$name};
   if ($taginfo) {
-    return $self->_make_FileSticky($taginfo);
+    my ($tagspec, $revnum) = @{ $taginfo };
+    return ($tagspec->get_type() eq VCS::LibCVS::Datum::TagSpec::TYPE_NONBRANCH);
   }
   return;
 }
@@ -214,35 +217,36 @@ sub get_branch {
 
 =head2 B<get_revision()>
 
-$files_rev = $cvs_file->get_revision($sticky_info)
+$files_rev = $cvs_file->get_revision($tag_or_revision)
 
 =over 4
 
-=item argument 1 type: VCS::LibCVS::Sticky
+=item argument 1 type: scalar string
 
 =item return type: VCS::LibCVS::FileRevision
 
 =back
 
-Returns the revision of the file specified by the sticky info.
+Returns the revision of the file specified by the named tag or revision number,
+or raises an error if there is no such tag or revision.
 
 The BASE tag is not supported, since this is a repository object with no
-knowledge of the working directory.  The LocalFile object will provide the
+knowledge of the working directory.  The WorkingFile object will provide the
 necessary information.
 
 =cut
 
 sub get_revision {
   my $self = shift;
-  my $sticky = shift;
-
+  my $tag_or_rev = shift;
   my $rev;
 
-  # Each type of sticky data requires different behaviour
-  if (ref($sticky) eq "VCS::LibCVS::StickyTag") {
-    $rev = $self->_get_all_tags()->{$sticky->get_tag}->[1];
-  } elsif (ref($sticky) eq "VCS::LibCVS::StickyRevision") {
-    $rev = VCS::LibCVS::Datum::RevisionNumber->new($sticky->get_revision());
+  my $taginfo = $self->_get_all_tags()->{$tag_or_rev};
+  if ($taginfo && 
+      $taginfo->[0]->get_type() eq VCS::LibCVS::Datum::TagSpec::TYPE_NONBRANCH) {
+    $rev = $taginfo->[1];
+  } else {
+    $rev = VCS::LibCVS::Datum::RevisionNumber->new($tag_or_rev);
   }
 
   return VCS::LibCVS::FileRevision->new($self, $rev);
@@ -306,22 +310,6 @@ sub _load_tags {
   $self->{Tags} = \%tags;
 }
 
-# make a FileSticky from a $self->{Tags} entry.  Return undef if it's not a
-# NONBRANCH tag.
-
-sub _make_FileSticky {
-  my ($self, $tags_entry) = @_;
-
-  my ($tagspec, $revnum) = @{ $tags_entry };
-
-  if ($tagspec->get_type() eq VCS::LibCVS::Datum::TagSpec::TYPE_NONBRANCH) {
-    my $s = VCS::LibCVS::StickyTag->new($self->{Repository}, $tagspec->{Name});
-    my $r = VCS::LibCVS::FileRevision->new($self, $revnum);
-    return VCS::LibCVS::FileSticky->new($r, $s);
-  }
-  return;
-}
-
 # make a FileBranch from a $self->{Tags} entry.  Return undef if it's not a
 # BRANCH tag.
 
@@ -361,7 +349,8 @@ sub _load_log_messages {
   my $loginfo = $self->_get_loginfo_from_server({NoTag => 1});
 
   # The log messages are returned in this format:
-  #
+
+  # <header stuff>
   # description:
   # ----------------------------
   # revision 1.2
@@ -380,23 +369,37 @@ sub _load_log_messages {
   # So it is processed by traversing the responses until we hit the string
   # "description:", after which log messages are split by ------ lines
 
-  confess "Empty log, $self->{FileSpec} is a directory" if ( @$loginfo == 0);
+  confess "Empty log, $self->{FileSpec} is a directory." if ( @$loginfo == 0);
 
-  # eat up everything up to and including the "description:" line
+  # Discard the header, everything up to and including the "description:" line
   while ( @$loginfo ) {
+    # Validate that this loginfo is for the correct file.  Generally this check
+    # is not needed, but may be useful to help catch problems.  There is one
+    # case where it is needed, explained below [1].
+    if ($loginfo->[0] =~ /^Working file: (.*)/) {
+      if ($1 ne $self->{FileSpec}) {
+        confess "Bad Working file in log, $self->{FileSpec} is a directory.";
+      }
+    }
     last if (shift @$loginfo) eq "description:";
   }
   # the last line will be a bunch of ==, remove it now:
   my $last = pop @$loginfo;
   confess "Bad final log line: $last" unless $last =~ /={77}/;
 
+  # Collect all the log messages in a hash from revision to log message.
   my %logs;
   my $log_entry_sep = qr/-{28}/;
+
+  # Collect the lines that make up a single log message into the
+  # @log_mess_array, and use it to create a LogMessage.
   while (@$loginfo) {
     my $f_l = shift @$loginfo;
     confess "Bad log entry separator: $f_l" unless $f_l =~ $log_entry_sep;
     my @log_mess_array;
-    while (@$loginfo && ( $loginfo->[0] !~ $log_entry_sep )) {
+    while (@$loginfo) {
+      last if (($loginfo->[0] =~ $log_entry_sep ) &&
+               ($loginfo->[1] =~ /^revision [0-9.]*/ ));
       push (@log_mess_array, (shift @$loginfo));
     }
     my $log_mess = VCS::LibCVS::Datum::LogMessage->new(\@log_mess_array);
@@ -441,3 +444,17 @@ sub _get_repo_dirs {
 =cut
 
 1;
+
+### Footnotes
+
+# [1] The check _load_log_messages() that the log messages match the file is
+# used in the following circumstances.  RepositoryFileOrDirectory->find() calls
+# the RepositoryFile constructor and if it fails concludes that the argument in
+# fact represents a directory.  The constructor fails because
+# _load_log_messages() fails to retrieve any log messages for the directory.
+# No log messages are returned because no Directory request is submitted for
+# the subdirectory in the cvsclient protocol, only its parent.  However, in the
+# case of the root directory of the repository, a Directory request _is_
+# submitted, because this is always done in order not to break the protocol,
+# and so some log messages are returned.  Without this check the constructor
+# would mistakenly conclude that "." is a file and not a directory.

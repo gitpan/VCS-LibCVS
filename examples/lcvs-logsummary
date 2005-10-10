@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# Copyright 2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -47,7 +47,7 @@ if (@ARGV == 0) {
 }
 
 if ($opt_version) {
-  print '$Header: /cvs/libcvs/Perl/examples/lcvs-logsummary,v 1.11 2004/08/31 02:33:35 dissent Exp $ ', "\n";
+  print '$Header: /cvsroot/libcvs-perl/libcvs-perl/examples/lcvs-logsummary,v 1.15 2005/10/10 12:52:12 dissent Exp $ ', "\n";
   print "VCS::LibCVS::VERSION = $VCS::LibCVS::VERSION\n";
   exit;
 }
@@ -64,8 +64,8 @@ tags, for all of the specified files.  If two identical log messages are found
 for revisions on different files, that were committed by the same user, at
 the same time, they are merged into one entry.
 
-Any number of file or directory names may be specified.  They must not start
-with a /, and are all treated as relative to the root of the repository.
+Files and directories are specified by a relative path from the root of the
+repository.  Local filesystem paths are not accepted.
 
 If only one tag is specified, then all ancestor revisions are used.  If no tags
 are specified, then the HEAD revision and all ancestors are used.  If two tags
@@ -114,12 +114,11 @@ Options:
 ### Internal helper routines
 ###############################################################################
 
-# Although the command line args are only traversed once, this traversal
-# routine may be more widely applicable, so it is preserved here as an example.
-# It is called with a single argument which is a callback.  It will call the
-# callback with a RepositoryFile object for each file to be traversed.  If the
-# callback returns false, this routine will return immediately, terminating the
-# traversal.
+# Although the command line args are only traversed once, this routine may be
+# more widely applicable, so it is preserved here as an example.  It is called
+# with a single argument which is a callback.  It will call the callback with a
+# RepositoryFile object for each file to be traversed.  If the callback returns
+# false, this routine will return immediately, terminating the traversal.
 
 sub traverse_args {
   my ($repo, $routine) = @_;
@@ -264,19 +263,15 @@ my @deferred_files;
 sub process_files_all_tags {
   my $file = shift;
 
-  # Sticky objects for the necessary tags
-  my $sticky_d = $file->get_tag($tagd);
-  my $sticky_a = (defined $taga) ? $file->get_tag($taga) : undef;
-
   # If the tags aren't there, defer this file
-  if ((!defined $sticky_d) || (defined $taga && ! defined $sticky_a)) {
+  if ((!$file->has_tag($tagd)) || (defined $taga && !$file->has_tag($taga))) {
     push(@deferred_files, $file);
     return 1;
   }
 
   # The FileRevision objects for each tag.
-  my $rev_d = $sticky_d->get_file_revision();
-  my $rev_a = (defined $sticky_a) ? $sticky_a->get_file_revision() : undef;
+  my $rev_d = $file->get_revision($tagd);
+  my $rev_a = (defined $taga) ? $file->get_revision($taga) : undef;
 
   # Validate that the tags are in the correct order.
   if (defined $taga) {
@@ -381,9 +376,8 @@ foreach my $file (@deferred_files) {
   my ($rev_d, $rev_a);
 
   # If the descendant tag is there, use it.
-  my $sticky_d = $file->get_tag($tagd);
-  if (defined $sticky_d) {
-    $rev_d = $sticky_d->get_file_revision();
+  if ($file->has_tag($tagd)) {
+    $rev_d = $file->get_revision($tagd);
 
   } else {
     # The descendant tag is missing, so find the revision on the appropriate
@@ -415,8 +409,8 @@ foreach my $file (@deferred_files) {
   # will be processed.  The reason not to skip any of these files is that they
   # are in the tagged ancestor set, so their history must be important to it.
 
-  if ((defined $taga) && (defined $file->get_tag($taga))) {
-    $rev_a = $file->get_tag($taga)->get_file_revision();
+  if ((defined $taga) && ($file->has_tag($taga))) {
+    $rev_a = $file->get_revision($taga);
   }
 
   # Traverse the revisions from descendant.

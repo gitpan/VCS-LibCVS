@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -33,7 +33,7 @@ up, ci, add, etc.
 
 =cut
 
-$VCS::LibCVS::Client::Request::ArgumentUsingRequests::REVISION = '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Request/ArgumentUsingRequests.pm,v 1.15 2004/05/18 13:35:40 dissent Exp $ ';
+$VCS::LibCVS::Client::Request::ArgumentUsingRequests::REVISION = '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Client/Request/ArgumentUsingRequests.pm,v 1.18 2005/10/10 12:52:11 dissent Exp $ ';
 
 ###############################################################################
 # ArgumentUsingRequest
@@ -53,9 +53,9 @@ use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request");
 sub required_data { return () };
 
-=head2 B<needs_file_contents()>
+=head2 B<uses_file_contents()>
 
-if ($request->needs_file_contents())
+if ($request->uses_file_contents())
 
 =over 4
 
@@ -71,13 +71,13 @@ request issued for it, prior to issuing this request.
 
 =cut
 
-sub needs_file_contents {
+sub uses_file_contents {
   return 0;
 }
 
-=head2 B<needs_file_entry()>
+=head2 B<uses_file_entry()>
 
-if ($request->needs_file_entry())
+if ($request->uses_file_entry())
 
 =over 4
 
@@ -92,12 +92,12 @@ information.  "update" is such a request.
 If this returns true, each local file should have an Entry request issued for
 it, prior to issuing this request.
 
-This routine and needs_file_contents() are separate because the "tag" request
+This routine and uses_file_contents() are separate because the "tag" request
 doesn't need the file contents.
 
 =cut
 
-sub needs_file_entry {
+sub uses_file_entry {
   return 0;
 }
 
@@ -115,8 +115,8 @@ package VCS::LibCVS::Client::Request::ci;
 use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
 sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "ci"; }
-sub needs_file_contents { return 1; }
-sub needs_file_entry { return 1; }
+sub uses_file_contents { return 1; }
+sub uses_file_entry { return 1; }
 
 ###############################################################################
 # diff
@@ -132,8 +132,8 @@ package VCS::LibCVS::Client::Request::diff;
 use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
 sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "diff"; }
-sub needs_file_contents { return 1; }
-sub needs_file_entry { return 1; }
+sub uses_file_contents { return 1; }
+sub uses_file_entry { return 1; }
 
 ###############################################################################
 # tag
@@ -149,7 +149,7 @@ package VCS::LibCVS::Client::Request::tag;
 use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
 sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "tag"; }
-sub needs_file_entry { return 1; }
+sub uses_file_entry { return 1; }
 
 ###############################################################################
 # status
@@ -165,8 +165,8 @@ package VCS::LibCVS::Client::Request::status;
 use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
 sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "status"; }
-sub needs_file_contents { return 1; }
-sub needs_file_entry { return 1; }
+sub uses_file_contents { return 1; }
+sub uses_file_entry { return 1; }
 
 ###############################################################################
 # log
@@ -257,8 +257,8 @@ package VCS::LibCVS::Client::Request::update;
 use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
 sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "update"; }
-sub needs_file_contents { return 1; }
-sub needs_file_entry { return 1; }
+sub uses_file_contents { return 1; }
+sub uses_file_entry { return 1; }
 
 ###############################################################################
 # add
@@ -305,8 +305,8 @@ package VCS::LibCVS::Client::Request::rdiff;
 use vars ('@ISA');
 @ISA =("VCS::LibCVS::Client::Request::ArgumentUsingRequest");
 sub BEGIN { push @VCS::LibCVS::Client::Request::Valid_requests, "rdiff"; }
-sub needs_file_contents { return 0; }
-sub needs_file_entry { return 0; }
+sub uses_file_contents { return 0; }
+sub uses_file_entry { return 0; }
 
 ###############################################################################
 # rlog

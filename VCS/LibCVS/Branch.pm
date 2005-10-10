@@ -1,5 +1,5 @@
 #
-# Copyright 2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -32,7 +32,7 @@ The main branch (usually branch number 1) is named using the special name
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Branch.pm,v 1.2 2004/08/08 17:44:11 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Branch.pm,v 1.4 2005/10/10 12:52:11 dissent Exp $ ';
 
 ###############################################################################
 # Class variables

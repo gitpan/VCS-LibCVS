@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -135,7 +135,6 @@ specific branches of many files at once.
 
 use VCS::LibCVS::FileBranch;
 use VCS::LibCVS::FileRevision;
-use VCS::LibCVS::FileSticky;
 
 =item VCS::LibCVS::FileBranch
 
@@ -145,10 +144,6 @@ perspective.
 =item VCS::LibCVS::FileRevision
 
 A specific revision of a file.
-
-=item VCS::LibCVS::FileSticky
-
-A specific revision of a file, as specified by some sticky information.
 
 =cut
 
@@ -161,26 +156,12 @@ branch name.
 
 =cut
 
-use VCS::LibCVS::Sticky;
-use VCS::LibCVS::StickyTag;
-use VCS::LibCVS::StickyRevision;
+use VCS::LibCVS::Slice;
 
-=item VCS::LibCVS::Sticky
+=item VCS::LibCVS::Slice
 
-A piece of sticky information, across the repository.  Really, a slice of the
-repository.  This class ought to be renamed, and rethought.
-
-=item VCS::LibCVS::StickyTag
-
-A sticky tag, across the repository.  Really, a slice of the repository.  This
-class ought to be renamed, and rethought.
-
-=item VCS::LibCVS::StickyRevision
-
-A sticky revision, across the repository.  Really, a slice of the repository.
-This class ought to be renamed, and rethought.
-
-=back
+A slice through the repository.  A set of file revisions, with at most one
+revision per file.
 
 =cut
 
@@ -218,11 +199,11 @@ which specifies a repository.
 # Constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS.pm,v 1.23 2004/08/31 00:20:31 dissent Exp $ ';
-use constant VERSION_TAG => '$Name: Release-Perl-1-00-01 $';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS.pm,v 1.28 2005/10/10 12:58:42 dissent Exp $ ';
+use constant VERSION_TAG => '$Name: Release-1-00-02 $';
 
 use vars ('$VERSION');
-$VERSION = 1.0001_0;
+$VERSION = 1.0002_0;
 
 ###############################################################################
 # Variables

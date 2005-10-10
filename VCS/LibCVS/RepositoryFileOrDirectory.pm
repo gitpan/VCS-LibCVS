@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ RepositoryDirectory which inherit from it.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/RepositoryFileOrDirectory.pm,v 1.11 2004/08/31 00:20:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/RepositoryFileOrDirectory.pm,v 1.14 2005/10/10 12:52:11 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -88,7 +88,7 @@ sub find {
   # Try to load it as a file, if an exception is thrown, then it's a directory.
   eval { $file_or_dir = VCS::LibCVS::RepositoryFile->new(@_); };
   if ($@) {
-    if ($@ !~ /^Empty log, .* is a directory/) {
+    if ($@ !~ /^.* is a directory./) {
       confess($@);
     }
     $file_or_dir = VCS::LibCVS::RepositoryDirectory->new(@_);

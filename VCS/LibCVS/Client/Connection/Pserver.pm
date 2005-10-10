@@ -1,5 +1,5 @@
 #
-# Copyright 2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -37,7 +37,7 @@ standard pserver port, 2401.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection/Pserver.pm,v 1.5 2004/04/28 02:32:00 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Client/Connection/Pserver.pm,v 1.7 2005/10/10 12:52:11 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::Client::Connection");

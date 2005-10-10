@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -29,7 +29,7 @@ considered.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/DirectoryBranch.pm,v 1.8 2004/08/27 03:49:09 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/DirectoryBranch.pm,v 1.11 2005/10/10 12:52:11 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -147,7 +147,7 @@ Values are VCS::LibCVS::FileBranch objects
 
 For each file in this directory, on this branch, return a FileBranch object.
 
-It doesn't include files whos tip revision on this branch is dead.
+It doesn't include files whose tip revision on this branch is dead.
 
 =cut
 

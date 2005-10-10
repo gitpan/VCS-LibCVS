@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -40,7 +40,7 @@ than those must not be submitted to the server.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Request.pm,v 1.21 2004/08/31 00:20:32 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Client/Request.pm,v 1.23 2005/10/10 12:52:11 dissent Exp $ ';
 
 # Valid_requests is a list of all the requests in this implementation.
 # A request registers itself here in its BEGIN block.  It is needed to populate

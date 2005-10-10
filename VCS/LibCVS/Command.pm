@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -29,7 +29,7 @@ It is for internal LibCVS use only.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Command.pm,v 1.11 2004/08/31 02:32:48 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Command.pm,v 1.15 2005/10/10 12:19:18 dissent Exp $ ';
 
 ###############################################################################
 # Class variables
@@ -84,6 +84,7 @@ of these types:
   VCS::LibCVS::RepositoryDirectory
   VCS::LibCVS::WorkingFile
   VCS::LibCVS::WorkingDirectory
+  VCS::LibCVS::FileRevision
 
 =back
 
@@ -152,10 +153,17 @@ sub issue {
 
   ### Open the connection to the server
 
-  # See _get_client() for an explanation of why a server directory is passed in.
-  my $any_repo_dir = $self->{Files}->[0]->_get_repo_dirs()->[1];
-
-  my $client = $repo->_get_client($any_repo_dir);
+  # Get a client object for the repository.  _get_client() requires the name
+  # of a server directory, which is fetched from a FileOrDirectory object
+  # found in {Files}.
+  my $client;
+  {
+    my $f = $self->{Files}->[0];
+    if ($f->isa("VCS::LibCVS::FileRevision")) {
+      $f = $f->get_file();
+    }
+    $client = $repo->_get_client($f->_get_repo_dirs()->[1]);
+  }
 
   ### Send CVS options
   foreach my $opt (@{$self->{CVSOptions}}) {
@@ -180,6 +188,19 @@ sub issue {
   my %dirs_sent;
 
   foreach my $f (@{$self->{Files}}) {
+
+    if ( $f->isa("VCS::LibCVS::WorkingDirectory") ) {
+      confess "WorkingDirectory not supported.  See bug #14191.";
+    }
+
+    # Make sure that $f is a FileOrDirectory object, but keep any FileRevision
+    # object in order to generate an Entries line later.
+    my $fr;
+    if ($f->isa("VCS::LibCVS::FileRevision")) {
+      $fr = $f;
+      $f = $fr->get_file();
+    }
+
     my $fnreq = VCS::LibCVS::Client::Request::Argument->new([$f->get_name]);
     $client->submit_request($fnreq);
 
@@ -194,22 +215,27 @@ sub issue {
     # For some requests ( such as "ci" and "diff" ) the server needs
     # information about the local state of the files in the form of Entries
     # lines and the file contents.  This information is only sent if the
-    # Request object indicates that it is needed.
+    # Request object indicates that it is needed.  Some Requests, notably
+    # update, use file contents and entry requests, but don't require them.
 
-    if ( $f->isa("VCS::LibCVS::WorkingDirectory") ) {
-      confess "WorkingDirectory not supported.  See issue 52.";
+    if ($self->{AURequest}->uses_file_entry()) {
+      my $e;
+      if (defined $fr) {
+        # A FileRevision is being processed so get the entry from there.
+        $e = $fr->_get_entry();
+      } elsif ( $f->isa("VCS::LibCVS::WorkingFile") ) {
+        $e = $f->_get_entry();
+      }
+      if (defined $e) {
+        $client->submit_request(VCS::LibCVS::Client::Request::Entry->new([$e]));
+      }
     }
 
-    if ( $f->isa("VCS::LibCVS::WorkingFile") ) {
-      if ($self->{AURequest}->needs_file_entry()) {
-        my $e_req = VCS::LibCVS::Client::Request::Entry->new([$f->_get_entry]);
-        $client->submit_request($e_req);
-      }
-      if ($self->{AURequest}->needs_file_contents()) {
-        my $m = [$f->get_name({no_dir => 1}), $f->_get_mode, $f->_get_contents];
-        my $m_req = (VCS::LibCVS::Client::Request::Modified->new( $m ));
-        $client->submit_request($m_req);
-      }
+    if ($self->{AURequest}->uses_file_contents()
+        && $f->isa("VCS::LibCVS::WorkingFile")) {
+      my $m = [$f->get_name({no_dir => 1}), $f->_get_mode, $f->_get_contents];
+      my $m_req = (VCS::LibCVS::Client::Request::Modified->new( $m ));
+      $client->submit_request($m_req);
     }
   }
 
@@ -299,6 +325,34 @@ sub get_messages {
   return map {
     ($_->get_message() =~ /$p/) ? $_->get_message : ();
   } $self->get_responses("VCS::LibCVS::Client::Response::M");
+}
+
+=head2 B<get_errors()>
+
+@messages = $command->get_errors($pattern)
+
+=over 4
+
+=item return type: list of scalar strings
+
+=item argument 1 type: scalar string or Regexp
+
+Optional Regexp that returned errors match.
+
+=back
+
+Goes through all the E reponses and returns the contents of those which match
+the provided regexp.
+
+=cut
+
+sub get_errors {
+  my $self = shift;
+  my $p = shift || "^";
+
+  return map {
+    ($_->get_errors() =~ /$p/) ? $_->get_errors : ();
+  } $self->get_responses("VCS::LibCVS::Client::Response::E");
 }
 
 =head2 B<get_files()>

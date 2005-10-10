@@ -1,5 +1,5 @@
 #
-# Copyright 2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -31,7 +31,7 @@ passwords.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client/Connection/CvsPass.pm,v 1.2 2004/04/28 02:32:00 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Client/Connection/CvsPass.pm,v 1.6 2005/10/10 12:52:11 dissent Exp $ ';
 
 ###############################################################################
 # Private variables
@@ -71,9 +71,9 @@ sub new {
 
   $that->{Passwords} = {};
 
-  if ( -e get_passfilename()) {
-    my $pass_file = IO::File->new(get_passfilename());
-    confess "Couldn't read: ". get_passfilename() unless defined $pass_file;
+  if ( -e _get_passfilename()) {
+    my $pass_file = IO::File->new(_get_passfilename());
+    confess "Couldn't read: ". _get_passfilename() unless defined $pass_file;
     foreach my $pass_line ($pass_file->getlines()) {
       if ($pass_line =~ m#^/1 (:pserver:.*) (.*)$#) {
         $that->{Passwords}->{$1} = $2;
@@ -110,13 +110,7 @@ Retrieve the password for the indicated repository.
 sub get_password {
   my $self = shift;
   my $root = shift;
-
-  my $rootString = (":pserver"
-                    . ":" . $root->{UserName}
-                    . "@" . $root->{HostName}
-                    . ":" . ($root->{Port} || "2401")
-                    . $root->{RootDir});
-  return $self->{Passwords}->{$rootString};
+  return $self->{Passwords}->{_format_cvsroot($root)};
 }
 
 =head2 B<store_password()>
@@ -145,14 +139,9 @@ sub store_password {
   my $self = shift;
   my ($root, $password) = @_;
 
-  my $rootString = (":pserver"
-                    . ":" . $root->{UserName}
-                    . "@" . $root->{HostName}
-                    . ":" . ($root->{Port} || "2401")
-                    . $root->{RootDir});
-
+  my $rootString = _format_cvsroot($root);
   $self->{Passwords}->{$rootString} = $password;
-  $self->append($rootString, $password);
+  $self->_append($rootString, $password);
   return;
 }
 
@@ -163,13 +152,13 @@ sub store_password {
 
 # Append a password to .cvspass
 
-sub append {
+sub _append {
   my $self = shift;
   my ($root, $password) = @_;
 
-  my $pass_file = IO::File->new(get_passfilename(), "a");
+  my $pass_file = IO::File->new(_get_passfilename(), "a");
 
-  confess "Couldn't append to: ". get_passfilename() unless defined $pass_file;
+  confess "Couldn't append to: ". _get_passfilename() unless defined $pass_file;
 
   $pass_file->print("/1 $root $password\n");
   $pass_file->close();
@@ -179,9 +168,19 @@ sub append {
 
 # Get the name of the cvs pass file:
 
-sub get_passfilename {
+sub _get_passfilename {
   my $pass_filename = File::Spec->catpath('', $ENV{HOME}, ".cvspass");
   return $pass_filename;
+}
+
+# Create a cvsroot string for the .cvspass file from a Root
+sub _format_cvsroot {
+  my $root = shift;
+  return (":pserver"
+          . ":" . ($root->{UserName} || getlogin())
+          . "@" . $root->{HostName}
+          . ":" . ($root->{Port} || "2401")
+          . $root->{RootDir});
 }
 
 =pod

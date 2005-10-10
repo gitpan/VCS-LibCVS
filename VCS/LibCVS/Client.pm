@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -111,7 +111,7 @@ The rest of this documentation is for the VCS::LibCVS::Client class itself.
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/Client.pm,v 1.30 2004/08/31 01:56:34 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/Client.pm,v 1.34 2005/10/10 12:52:11 dissent Exp $ ';
 
 # The default list of valid responses that the client will report
 use constant DEFAULT_VALID_RESPONSES =>
@@ -547,32 +547,60 @@ sub _test_support_multiple_commands {
 
   # Try to send the same command twice and see if it fails.  I've chosen this
   # command because it should be fast and not produce any output:
-  #   rdiff -l -r HEAD .
+  #   rdiff -l -r HEAD
+
+  # It would be nice to always perform this command at the root of the
+  # repository, ".".  But a lock must be created which is not always possible,
+  # so instead a directory in which to perform it has been provided.  However,
+  # sometimes this directory might not exist, through no fault of the user.  To
+  # handle this eventuality, if the command fails, it is reattempted on the
+  # parents of the TestDirectory, until it succeeds, or it fails on the root of
+  # the repository.
+  my $test_dir = $self->{TestDir};
 
   my $arg_l    = VCS::LibCVS::Client::Request::Argument->new("-l");
   my $arg_r    = VCS::LibCVS::Client::Request::Argument->new("-r");
   my $arg_head = VCS::LibCVS::Client::Request::Argument->new("HEAD");
-  my $arg_dir  = VCS::LibCVS::Client::Request::Argument->new($self->{TestDir});
+  my $arg_dir;
 
   my $command = VCS::LibCVS::Client::Request::rdiff->new();
 
+  while (1) {
+    $arg_dir = VCS::LibCVS::Client::Request::Argument->new($test_dir);
+
+    $self->submit_request($arg_l);
+    $self->submit_request($arg_r);
+    $self->submit_request($arg_head);
+    $self->submit_request($arg_dir);
+    my @resps = $self->submit_request($command);
+
+    if (($resps[-1]->isa("VCS::LibCVS::Client::Response::ok"))) {
+      last;
+    } else {
+      # The command failed.
+
+      # If we reached the root, then there's nothing more to try, so fail.
+      if ($test_dir eq ".") {
+        my $errors;
+        foreach my $resp (@resps) { $errors .= ($resp->get_errors() || ""); };
+        confess "Request failed: \"$errors\"";
+      }
+
+      # Modify $test_dir to specify its parent, and try again.
+      if ($test_dir =~ "/") {
+        $test_dir =~ s#(.*)/.*#$1#;
+      } else {
+        $test_dir = ".";
+      }
+    }
+  }
+
+  # Attempt the command a second time.
   $self->submit_request($arg_l);
   $self->submit_request($arg_r);
   $self->submit_request($arg_head);
   $self->submit_request($arg_dir);
   my @resps = $self->submit_request($command);
-
-  if (($resps[-1]->isa("VCS::LibCVS::Client::Response::error"))) {
-    my $errors;
-    foreach my $resp (@resps) { $errors .= ($resp->get_errors() || ""); };
-    confess "Request failed: \"$errors\"";
-  }
-
-  $self->submit_request($arg_l);
-  $self->submit_request($arg_r);
-  $self->submit_request($arg_head);
-  $self->submit_request($arg_dir);
-  @resps = $self->submit_request($command);
 
   $self->{Connection}->disconnect();
 

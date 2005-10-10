@@ -1,5 +1,5 @@
 #
-# Copyright 2003,2004 Alexander Taler (dissent@0--0.org)
+# Copyright (c) 2003,2004,2005 Alexander Taler (dissent@0--0.org)
 #
 # All rights reserved. This program is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
@@ -30,7 +30,7 @@ VCS::LibCVS::WorkingFileOrDirectory
 # Class constants
 ###############################################################################
 
-use constant REVISION => '$Header: /cvs/libcvs/Perl/VCS/LibCVS/WorkingFile.pm,v 1.12 2004/08/27 06:08:36 dissent Exp $ ';
+use constant REVISION => '$Header: /cvsroot/libcvs-perl/libcvs-perl/VCS/LibCVS/WorkingFile.pm,v 1.15 2005/10/10 12:52:11 dissent Exp $ ';
 
 use vars ('@ISA');
 @ISA = ("VCS::LibCVS::WorkingFileOrDirectory");
@@ -148,17 +148,7 @@ If there is no sticky branch tag, it returns the MAIN branch.
 sub get_branch {
   my $self = shift;
 
-  my $entry_line = $self->{Entry};
-
-  my $tag = $entry_line->get_tag();
-
-print "^^^^^^a^: $tag\n";
-
-#   return VCS::LibCVS::Branch->new($self->{Admin}->get_Root(),
-#                                   $self->{Admin}->get_Repository(),
-#                                   $self->{FileName},
-#                                   $entry_line->get_tag->{TagSpec}
-#                                  );
+  return $self->get_file_branch()->get_branch();
 }
 
 =head2 B<get_file_branch()>
@@ -190,10 +180,12 @@ base tags for branches.
 sub get_file_branch {
   my $self = shift;
 
+  my $tag = $self->{Entry}->get_tag();
+
   # Quickly handle the common case of a trunk revision.
   my $revision = $self->get_revision_number();
   my $branch_rev = $revision->branch_of();
-  if ($branch_rev->is_trunk()) {
+  if (!defined($tag) && $branch_rev->is_trunk()) {
     return VCS::LibCVS::FileBranch->new($self->get_remote_object(),
                                         undef,
                                         $branch_rev);
@@ -208,7 +200,6 @@ sub get_file_branch {
   my $all_branches = $r_file->get_branches();
 
   # If it's a branch tag, it will match one of the branches.
-  my $tag = $self->{Entry}->get_tag();
   if (defined ($tag)) {
     foreach my $branch (@$all_branches) {
       return $branch if $branch->get_tag()->equals($tag);
